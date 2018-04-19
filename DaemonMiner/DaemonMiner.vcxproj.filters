@@ -1,33 +1,40 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="Source Files">
-      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
-      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    <Filter Include="Public">
+      <UniqueIdentifier>{0f64ee2d-bd92-48ca-acf6-c7a319d3907a}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Header Files">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;hm;inl;inc;ipp;xsd</Extensions>
+    <Filter Include="Public\WinService">
+      <UniqueIdentifier>{bdbe5b89-b458-4a4e-8dee-10b4dfece227}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Resource Files">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    <Filter Include="Private">
+      <UniqueIdentifier>{7e87b3a5-60d6-421c-b8c9-d86ce641b43d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Private\WinService">
+      <UniqueIdentifier>{7a5e7324-08f6-43ed-9f23-af387e2d9748}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Public\Logger">
+      <UniqueIdentifier>{07e9516a-632f-4488-8244-bfac034aa8b7}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="stdafx.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="targetver.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
+    <ClCompile Include="Service.cpp">
+      <Filter>Private\WinService</Filter>
+    </ClCompile>
+    <ClCompile Include="Private\WinService\IService.cpp">
+      <Filter>Private\WinService</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="stdafx.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="DaemonMiner.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
+    <ClInclude Include="Service.h">
+      <Filter>Public\WinService</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\WinService\IService.h">
+      <Filter>Public\WinService</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Logger\Logger.h">
+      <Filter>Public\Logger</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

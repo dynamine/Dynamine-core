@@ -7,68 +7,68 @@ IService::IService()
 	// TODO:
 }
 
-BOOL IService::install()
+BOOL IService::Install()
 {
 	// TODO:
 	return FALSE;
 }
 
-BOOL IService::uninstall()
+BOOL IService::Uninstall()
 {
 	// TODO:
 	return FALSE;
 }
 
-DWORD IService::start()
+DWORD IService::Start()
 {
 	// TODO:
 	return 0;
 }
 
-DWORD IService::stop()
+DWORD IService::Stop()
 {
 	// TODO:
 	return 0;
 }
 
-VOID IService::setServiceStatus(DWORD status, DWORD win32ExitCode=NULL, DWORD waitHint=NULL)
+VOID IService::SetServiceStatus(DWORD status, DWORD win32ExitCode=NULL, DWORD waitHint=NULL)
 {
 	static DWORD checkpoint = 1;
 
-	_status.dwCurrentState = status;
+	status.dwCurrentState = status;
 
 	// Optional status
 	if (win32ExitCode)
-		_status.dwWin32ExitCode = win32ExitCode;
+		status.dwWin32ExitCode = win32ExitCode;
 	if (waitHint)
-		_status.dwWaitHint = waitHint;
+		status.dwWaitHint = waitHint;
 	
 	// If the service is starting remote controls, else accept stop control
 	if (status == SERVICE_START_PENDING)
-		_status.dwControlsAccepted = 0;
+		status.dwControlsAccepted = 0;
 	else
-		_status.dwControlsAccepted = SERVICE_ACCEPT_STOP;
+		status.dwControlsAccepted = SERVICE_ACCEPT_STOP;
 
 	// If running or stopped then reset checkpoint otherwise increment global one
 	if ((status == SERVICE_RUNNING) || (status == SERVICE_STOPPED))
-		_status.dwCheckPoint = 0;
+		status.dwCheckPoint = 0;
 	else
-		_status.dwCheckPoint = checkpoint;
+		status.dwCheckPoint = checkpoint;
 	
 	// If the service is not actually running then we are done
-	if (isDebug())
+	if (IsDebug())
 		return;
 
-	::SetServiceStatus(_statusHandle, &_status);
+	::SetServiceStatus(status_handle, &status);
 }
 
-DWORD IService::execute()
+DWORD IService::Run()
 {
 	// Service status to running
-	setServiceStatus(SERVICE_RUNNING);
+	SetServiceStatus(SERVICE_RUNNING);
 
 	// Wait for the service exit event to be set before this method exits
-	::WaitForSingleObject(_exitEvent, INFINITE);
+	::WaitForSingleObject(exit_event, INFINITE);
 
 	return 0;
 }
@@ -84,12 +84,12 @@ BOOL WINAPI _consoleControlHandler(DWORD ctrlType)
 	return TRUE;
 }
 
-VOID IService::_serviceMain(DWORD argc, LPTSTR * argv)
+VOID IService::service_main(DWORD argc, LPTSTR * argv)
 {
 	// TODO: Check if we actually need to set this since our setServiceStatus function should handle it for us
 	//_status.dwCurrentState = SERVICE_START_PENDING;
 
-	if (isDebug())
+	if (IsDebug())
 	{
 		// Register the console control handler
 		::SetConsoleCtrlHandler( (PHANDLER_ROUTINE)_consoleControlHandler, TRUE);
@@ -97,7 +97,7 @@ VOID IService::_serviceMain(DWORD argc, LPTSTR * argv)
 	return;
 }
 
-DWORD IService::_serviceControlHandler(DWORD serviceControl, DWORD eventType, LPVOID eventData)
+DWORD IService::service_control_handler(DWORD serviceControl, DWORD eventType, LPVOID eventData)
 {
 	DWORD ret = NO_ERROR;
 

@@ -15,19 +15,19 @@ class IService
 public:
 	IService();
 
-	BOOL install();
+	BOOL Install();
 
-	BOOL uninstall();
+	BOOL Uninstall();
 
-	DWORD start();
+	DWORD Start();
 
-	DWORD stop();
+	DWORD Stop();
 
-	VOID setServiceStatus(DWORD status, DWORD win32ExitCode, DWORD waitHint);
-	BOOL isDebug() { return _debug; }
-	Logger* getLogger() { return _logger; }
+	VOID SetServiceStatus(DWORD status, DWORD win32ExitCode, DWORD waitHint);
+	BOOL IsDebug() { return debug; }
+	Logger* GetLogger() { return logger; }
 	
-	virtual DWORD execute();
+	virtual DWORD Run();
 
 	// Service event handler functions to be overriden by parent class
 	virtual VOID onShutdown()				{}
@@ -54,24 +54,25 @@ public:
 	virtual VOID onStop()
 	{
 		// Update service status
-		setServiceStatus(SERVICE_STOP_PENDING, NULL, NULL);
+		SetServiceStatus(SERVICE_STOP_PENDING, NULL, NULL);
 
 		// Set our exit event so the service knows to exit
-		::SetEvent(_exitEvent);
+		::SetEvent(exit_event);
 	}
 
 protected:
-	VOID WINAPI _serviceMain(DWORD argc, LPTSTR* argv);
-	DWORD WINAPI _serviceControlHandler(DWORD serviceControl, DWORD eventType, LPVOID eventData);
+	VOID WINAPI service_main(DWORD argc, LPTSTR* argv);
+	DWORD WINAPI service_control_handler(DWORD serviceControl, DWORD eventType, LPVOID eventData);
 
-	WCHAR						_serviceName[WCHAR_MAX];	// Service name
-	SERVICE_STATUS_HANDLE		_statusHandle;				// Service status handle
-	HANDLE						_exitEvent;					// Exit interrupt handle to signal the service to exit
-	SERVICE_STATUS				_status;						// Service's status
-	BOOL						_debug;						// Enables extra logging and doesn't attatch the service into dispatchTable
-	Logger*						_logger;					// Logger to send all the logs to
+	WCHAR						service_name[WCHAR_MAX];	// Service name
+	SERVICE_STATUS_HANDLE		status_handle;				// Service status handle
+	HANDLE						exit_event;					// Exit interrupt handle to signal the service to exit
+	SERVICE_STATUS				status;						// Service's status
+	BOOL						debug;						// Enables extra logging and doesn't attatch the service into dispatchTable
+	Logger*						logger;					// Logger to send all the logs to
 
 private:
-	//BOOL WINAPI _consoleControlHandler(DWORD ctrlType);
-
+	BOOL WINAPI console_control_handler(DWORD ctrlType);
+	IService(const IService&);
+	IService& operator=(const IService&);
 };

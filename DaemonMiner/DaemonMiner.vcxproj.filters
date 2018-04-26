@@ -25,6 +25,10 @@
       <Filter>Private\WinService</Filter>
     </ClCompile>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="msdn_ref.cpp" />
+    <ClCompile Include="Private\WinService\DynamineDaemon.cpp">
+      <Filter>Private\WinService</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Service.h">
@@ -35,6 +39,9 @@
     </ClInclude>
     <ClInclude Include="Public\Logger\Logger.h">
       <Filter>Public\Logger</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\WinService\DynamineDaemon.h">
+      <Filter>Public\WinService</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

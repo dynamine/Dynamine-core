@@ -5,28 +5,37 @@
 #include <tchar.h>
 #include <dbt.h>
 #include <crtdbg.h>
-#include <stdarg.h>
+#include <cstdarg>
 #include <strsafe.h>
+#include <string>
 
 #include "../Logger/Logger.h"
+
+// Can't forward declare just wstring since it's a typedef of std:basic_string<wchar> :/
+//using namespace std;
 
 class IService
 {
 public:
-	IService();
+	// Only one service object in the process
+	IService(CONST PWCHAR name, CONST PWCHAR display_name, CONST DWORD accepted_controls, Logger * log_instance);
 
-	BOOL Install();
+	virtual ~IService();
+
+	// Control methods
+	
+	BOOL Install(CONST DWORD start_type, PWSTR dependencies, PWSTR account, PWSTR password);
 
 	BOOL Uninstall();
 
 	DWORD Start();
 
-	DWORD Stop();
 
-	VOID SetServiceStatus(DWORD status, DWORD win32ExitCode, DWORD waitHint);
-	BOOL IsDebug() { return debug; }
-	Logger* GetLogger() { return logger; }
+	VOID SetStatus(DWORD status, DWORD win32_exit_code, DWORD wait_hint);
+	BOOL IsDebug() { return debug_; }
+	Logger* GetLogger() { return logger_; }
 	
+	// Overridden with code that runs as a service
 	virtual DWORD Run();
 
 	// Service event handler functions to be overriden by parent class
@@ -54,25 +63,43 @@ public:
 	virtual VOID onStop()
 	{
 		// Update service status
-		SetServiceStatus(SERVICE_STOP_PENDING, NULL, NULL);
+		SetStatus(SERVICE_STOP_PENDING, NULL, NULL);
 
 		// Set our exit event so the service knows to exit
-		::SetEvent(exit_event);
+		::SetEvent(exit_event_);
 	}
 
 protected:
-	VOID WINAPI service_main(DWORD argc, LPTSTR* argv);
-	DWORD WINAPI service_control_handler(DWORD serviceControl, DWORD eventType, LPVOID eventData);
+	// Static is called to access this function from the singleton
+	static VOID WINAPI service_main(DWORD argc, LPTSTR* argv);
+	
 
-	WCHAR						service_name[WCHAR_MAX];	// Service name
-	SERVICE_STATUS_HANDLE		status_handle;				// Service status handle
-	HANDLE						exit_event;					// Exit interrupt handle to signal the service to exit
-	SERVICE_STATUS				status;						// Service's status
-	BOOL						debug;						// Enables extra logging and doesn't attatch the service into dispatchTable
-	Logger*						logger;					// Logger to send all the logs to
+	// Static is called to access this function from the singleton
+	static BOOL WINAPI console_control_handler(DWORD ctrl_type);
+	
 
+	static DWORD WINAPI service_control_handler(DWORD service_control, DWORD event_type, LPVOID event_data, LPVOID service_context);
+	
+	// Singleton instance
+	static IService* instance_;
+
+	
+    WCHAR                       service_name_[WCHAR_MAX];    // Service name
+	WCHAR                       display_name_[WCHAR_MAX];    // Service display name
+	SERVICE_STATUS_HANDLE       status_handle_;              // Service status handle
+	HANDLE                      exit_event_;                 // Exit interrupt handle to signal the service to exit
+	SERVICE_STATUS              status_;                     // Service's status
+	BOOL                        debug_;                      // Enables extra logging and doesn't attatch the service into dispatchTable
+	Logger*                     logger_;                     // Logger to send all the logs to
+	CRITICAL_SECTION            status_mutex_;               // Critical Section mutex
 private:
-	BOOL WINAPI console_control_handler(DWORD ctrlType);
+	// Internal functions that can only be accessed to provide static functions with functionality
+	VOID _service_main(DWORD argc, LPTSTR* argv);
+	BOOL _console_control_handler(DWORD ctrlType);
+	DWORD _service_control_handler(DWORD service_control, DWORD event_type, LPVOID event_data);
+
+	// Singleton Modifiers
+	IService();
 	IService(const IService&);
-	IService& operator=(const IService&);
+	void operator=(const IService&);
 };

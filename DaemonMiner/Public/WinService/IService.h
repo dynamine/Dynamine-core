@@ -22,48 +22,52 @@ public:
 
 	virtual ~IService();
 
-	// Control methods
-	
+	// -----------------
+	// External methods
 	BOOL Install(CONST DWORD start_type, PWSTR dependencies, PWSTR account, PWSTR password);
 
 	BOOL Uninstall();
 
-	DWORD Start();
+	DWORD Run();
+	// -----------------
 
+	VOID SetStatus(DWORD status);
 
-	VOID SetStatus(DWORD status, DWORD win32_exit_code, DWORD wait_hint);
+	VOID SetStatusStopped(DWORD exit_code, BOOL specific);
+
+	VOID SetHintTime(DWORD runtime_ms);
+	VOID CheckIn();
 	BOOL IsDebug() { return debug_; }
 	Logger* GetLogger() { return logger_; }
-	
-	// Overridden with code that runs as a service
-	virtual DWORD Run();
 
+	VOID WaitForExit();
+
+	// -------------------------------------------------------------------
 	// Service event handler functions to be overriden by parent class
-	virtual VOID onShutdown()				{}
-	virtual VOID onPause()					{}
-	virtual VOID onContinue()				{}
-	virtual VOID onInterrogate()			{}
+	virtual VOID OnShutdown()				{}
+	virtual VOID OnPause()					{}
+	virtual VOID OnContinue()				{}
+	virtual VOID OnInterrogate()			{}
+	virtual VOID OnUnknownRequest(DWORD control) {}
 
-	virtual VOID onUnknownRequest(DWORD control) {}
-
-	virtual DWORD onDeviceEvent(DWORD dbt, PDEV_BROADCAST_HDR hdr)	{ return NO_ERROR; }
-	virtual DWORD onHardwareProfileChange(DWORD dbt)				{ return NO_ERROR; }
+	virtual DWORD OnDeviceEvent(DWORD dbt, PDEV_BROADCAST_HDR hdr)	{ return NO_ERROR; }
+	virtual DWORD OnHardwareProfileChange(DWORD dbt)				{ return NO_ERROR; }
 
 	// Windows version specific events
 	#if (_WIN32_WINNT >= _WIN32_WINNT_WINXP)
-	virtual DWORD onSessionChange(DWORD event, PWTSSESSION_NOTIFICATION session) { return NO_ERROR; }
+	virtual DWORD OnSessionChange(DWORD event, PWTSSESSION_NOTIFICATION session) { return NO_ERROR; }
 	#endif
 	#if (_WIN32_WINNT >= _WIN32_WINNT_WS03)
-	virtual DWORD onPowerEvent(DWORD event, POWERBROADCAST_SETTING* setting) { return NO_ERROR; }
+	virtual DWORD OnPowerEvent(DWORD event, POWERBROADCAST_SETTING* setting) { return NO_ERROR; }
 	#endif
 	#if (_WIN32_WINNT >= _WIN32_WINNT_VISTA)
-	virtual DWORD onPreShutdown(LPSERVICE_PRESHUTDOWN_INFO info) { return NO_ERROR; }
+	virtual DWORD OnPreShutdown(LPSERVICE_PRESHUTDOWN_INFO info) { return NO_ERROR; }
 	#endif
-
-	virtual VOID onStop()
+	// -------------------------------------------------------------------
+	virtual VOID OnStop()
 	{
 		// Update service status
-		SetStatus(SERVICE_STOP_PENDING, NULL, NULL);
+		SetStatus(SERVICE_STOP_PENDING);
 
 		// Set our exit event so the service knows to exit
 		::SetEvent(exit_event_);
@@ -92,11 +96,15 @@ protected:
 	BOOL                        debug_;                      // Enables extra logging and doesn't attatch the service into dispatchTable
 	Logger*                     logger_;                     // Logger to send all the logs to
 	CRITICAL_SECTION            status_mutex_;               // Critical Section mutex
+
 private:
 	// Internal functions that can only be accessed to provide static functions with functionality
 	VOID _service_main(DWORD argc, LPTSTR* argv);
 	BOOL _console_control_handler(DWORD ctrlType);
 	DWORD _service_control_handler(DWORD service_control, DWORD event_type, LPVOID event_data);
+
+	// Internal function wrappers
+	VOID _set_status(DWORD status);
 
 	// Singleton Modifiers
 	IService();

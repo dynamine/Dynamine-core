@@ -197,7 +197,7 @@ Cleanup:
 	return ret;
 }
 
-DWORD IService::Start()
+DWORD IService::Run()
 {
 	// Get command line arguments and set configs with them
 	int num_args = 0;
@@ -219,7 +219,7 @@ DWORD IService::Start()
 	// If we are debugging then just run the service_main, no need to attatch to SVC manager
 	if (debug_)
 	{
-		IService::service_main(DWORD(num_args), wchar_cmd_args);
+		service_main(DWORD(num_args), wchar_cmd_args);
 	}
 	// This is the actual call that will happen that will run the service properly in windows
 	else 
@@ -239,48 +239,138 @@ DWORD IService::Start()
 	return status_.dwWin32ExitCode;
 }
 
-VOID IService::SetStatus(DWORD status_code, DWORD win32ExitCode=NULL, DWORD waitHint=NULL)
+VOID IService::SetStatus(DWORD status)
 {
 	EnterCriticalSection(&status_mutex_);
-	static DWORD checkpoint = 1;
 
-	status_.dwCurrentState = status_code;
+	_set_status(status);
 
-	// Optional status
-	if (win32ExitCode)
-		status_.dwWin32ExitCode = win32ExitCode;
-	if (waitHint)
-		status_.dwWaitHint = waitHint;
-	
-	// If the service is starting remote controls, else accept stop control
-	if (status_code == SERVICE_START_PENDING)
-		status_.dwControlsAccepted = 0;
-	else
-		status_.dwControlsAccepted = SERVICE_ACCEPT_STOP;
-
-	// If running or stopped then reset checkpoint otherwise increment global one
-	if ((status_code == SERVICE_RUNNING) || (status_code == SERVICE_STOPPED))
-		status_.dwCheckPoint = 0;
-	else
-		status_.dwCheckPoint = checkpoint;
-	
-	// If the service is not actually running then we are done
-	if (IsDebug())
-		return;
-
-	::SetServiceStatus(status_handle_, &status_);
 	LeaveCriticalSection(&status_mutex_);
 }
 
-DWORD IService::Run()
+VOID IService::SetStatusStopped(DWORD exit_code, BOOL specific=FALSE)
+{
+	EnterCriticalSection(&status_mutex_);
+
+	if (specific)
+	{
+		status_.dwWin32ExitCode = ERROR_SERVICE_SPECIFIC_ERROR;
+		status_.dwServiceSpecificExitCode = exit_code;
+	}
+	else
+		status_.dwWin32ExitCode = exit_code;
+
+	_set_status(SERVICE_STOPPED);
+
+	LeaveCriticalSection(&status_mutex_);
+}
+
+VOID IService::SetHintTime(DWORD runtime_ms)
+{
+	EnterCriticalSection(&status_mutex_);
+
+	// Update status
+	status_.dwCheckPoint++;
+	status_.dwWaitHint = runtime_ms;
+
+	// Apply status to service
+	::SetServiceStatus(status_handle_, &status_);
+
+	// Reset wait hint which won't apply until next ::SetServiceStatus call
+	status_.dwWaitHint = 0;
+
+	LeaveCriticalSection(&status_mutex_);
+}
+
+VOID IService::CheckIn()
+{
+	EnterCriticalSection(&status_mutex_);
+
+	status_.dwCheckPoint++;
+	::SetServiceStatus(status_handle_, &status_);
+
+	LeaveCriticalSection(&status_mutex_);
+}
+
+VOID IService::WaitForExit()
+{
+	::WaitForSingleObject(exit_event_, INFINITE);
+}
+
+DWORD IService::OLDRun()
 {
 	// Service status to running
-	SetStatus(SERVICE_RUNNING);
+	SetStatus(SERVICE_RUNNING); 
 
 	// Wait for the service exit event to be set before this method exits
-	::WaitForSingleObject(exit_event_, INFINITE);
+	
 
 	return 0;
+}
+
+
+
+// -------------------------------------------------------------------
+// Set as a static reference for the windows kernel calls
+// -------------------------------------------------------------------
+// What is called in the windows kernel on the singleton
+
+VOID IService::service_main(DWORD argc, LPTSTR* argv)
+{
+	_ASSERTE(instance_ != NULL);
+
+	instance_->_service_main(argc, argv);
+}
+
+BOOL IService::console_control_handler(DWORD ctrl_type)
+{
+	return instance_->_console_control_handler(ctrl_type);
+}
+
+DWORD IService::service_control_handler(DWORD service_control, DWORD event_type, LPVOID event_data, LPVOID service_context)
+{
+	return reinterpret_cast<IService*>(service_context)->_service_control_handler(service_control, event_type, event_data);
+}
+
+// -------------------------------------------------------------------
+
+
+// -------------------------------------------------------------------
+// Actual implementation called from singleton instance
+
+VOID IService::_service_main(DWORD argc, LPTSTR * argv)
+{
+	// TODO: Check if we actually need to set this since our setServiceStatus function should handle it for us
+	status_.dwCurrentState = SERVICE_START_PENDING;
+
+	if (IsDebug())
+	{
+		// Register the console control handler
+		::SetConsoleCtrlHandler(PHANDLER_ROUTINE(console_control_handler), TRUE);
+		_putws(L"Press Ctrl+C or Ctrl+Break to quit...");
+	}
+	else
+	{
+		// register the service handler routine
+		status_handle_ = ::RegisterServiceCtrlHandlerEx(service_name_, LPHANDLER_FUNCTION_EX(service_control_handler), (LPVOID)this);
+		if (status_handle_ == NULL)
+			SetStatusStopped(ERROR_INVALID_HANDLE);
+			return;
+	}
+
+	SetStatus(SERVICE_START_PENDING);
+	onStart(argc, argv);
+}
+
+BOOL IService::_console_control_handler(DWORD ctrl_type)
+{
+	// If not any exit event then ignore
+	if (!(ctrl_type == CTRL_C_EVENT || ctrl_type == CTRL_BREAK_EVENT || ctrl_type == CTRL_SHUTDOWN_EVENT))
+		return FALSE;
+
+	OnStop();
+
+	return FALSE;
 }
 
 DWORD IService::_service_control_handler(DWORD service_control, DWORD event_type, LPVOID event_data)
@@ -292,105 +382,61 @@ DWORD IService::_service_control_handler(DWORD service_control, DWORD event_type
 	switch (service_control)
 	{
 	case SERVICE_CONTROL_SHUTDOWN:
-		instance_->onShutdown();
+		instance_->OnShutdown();
 		break;
 	case SERVICE_CONTROL_PAUSE:
-		instance_->onPause();
+		instance_->OnPause();
 		break;
 	case SERVICE_CONTROL_CONTINUE:
-		instance_->onContinue();
+		instance_->OnContinue();
 		break;
 	case SERVICE_CONTROL_INTERROGATE:
-		instance_->onInterrogate();
+		instance_->OnInterrogate();
 		break;
 	case SERVICE_CONTROL_DEVICEEVENT:
-		ret = instance_->onDeviceEvent(event_type, static_cast<PDEV_BROADCAST_HDR>(event_data));
+		ret = instance_->OnDeviceEvent(event_type, static_cast<PDEV_BROADCAST_HDR>(event_data));
 		break;
 	case SERVICE_CONTROL_HARDWAREPROFILECHANGE:
-		ret = instance_->onHardwareProfileChange(event_type);
+		ret = instance_->OnHardwareProfileChange(event_type);
 		break;
-	// Only on WINXP or higher
-	#if (_WIN32_WINNT >= _WIN32_WINNT_WINXP)
+		// Only on WINXP or higher
+#if (_WIN32_WINNT >= _WIN32_WINNT_WINXP)
 	case SERVICE_CONTROL_SESSIONCHANGE:
-		ret = instance_->onSessionChange(event_type, static_cast<PWTSSESSION_NOTIFICATION>(event_data));
+		ret = instance_->OnSessionChange(event_type, static_cast<PWTSSESSION_NOTIFICATION>(event_data));
 		break;
-	#endif
-	// Only on WS03 or higher
-	#if (_WIN32_WINNT >= _WIN32_WINNT_WS03)
+#endif
+		// Only on WS03 or higher
+#if (_WIN32_WINNT >= _WIN32_WINNT_WS03)
 	case SERVICE_CONTROL_POWEREVENT:
-		ret = instance_->onPowerEvent(event_type, static_cast<POWERBROADCAST_SETTING*>(event_data));
+		ret = instance_->OnPowerEvent(event_type, static_cast<POWERBROADCAST_SETTING*>(event_data));
 		break;
-	#endif
-	// Only on Vista or higher
-	#if (_WIN32_WINNT >= _WIN32_WINNT_VISTA)
+#endif
+		// Only on Vista or higher
+#if (_WIN32_WINNT >= _WIN32_WINNT_VISTA)
 	case SERVICE_CONTROL_PRESHUTDOWN:
-		ret = instance_->onPreShutdown(static_cast<LPSERVICE_PRESHUTDOWN_INFO>(event_data));
+		ret = instance_->OnPreShutdown(static_cast<LPSERVICE_PRESHUTDOWN_INFO>(event_data));
 		break;
-	#endif
+#endif
 	default:
-		instance_->onUnknownRequest(service_control);
+		instance_->OnUnknownRequest(service_control);
 	}
 
 	return ret;
 }
 
-// What is called in the windows kernel on the singleton
-VOID IService::service_main(DWORD argc, LPTSTR* argv)
+// -------------------------------------------------------------------
+
+
+// -------------------------------------------------------------------
+// Internal helper functions
+
+VOID IService::_set_status(DWORD status)
 {
-	instance_->_service_main(argc, argv);
-}
-
-// Actual implementation called from singleton
-VOID IService::_service_main(DWORD argc, LPTSTR * argv)
-{
-	// TODO: Check if we actually need to set this since our setServiceStatus function should handle it for us
-	status_.dwCurrentState = SERVICE_START_PENDING;
-
-	if (IsDebug())
-	{
-		// Register the console control handler
-		::SetConsoleCtrlHandler(PHANDLER_ROUTINE(IService::console_control_handler), TRUE);
-		_putws(L"Press Ctrl+C or Ctrl+Break to quit...");
-	}
-	else 
-{
-		// register the service handler routine
-		status_handle_ = ::RegisterServiceCtrlHandlerEx(service_name_, LPHANDLER_FUNCTION_EX(service_control_handler), (LPVOID)this);
-		if (status_handle_ == NULL)
-			return;
-	}
-
-	SetStatus(SERVICE_START_PENDING);
-
-	status_.dwWin32ExitCode = S_OK;
+	status_.dwCurrentState = status;
 	status_.dwCheckPoint = 0;
 	status_.dwWaitHint = 0;
 
-	// When the Run function returns, the service has stopped.
-	status_.dwWin32ExitCode = Run();
-
-	SetStatus(SERVICE_STOPPED);
+	::SetServiceStatus(status_handle_, &status_);
 }
 
-// Set as a reference for the windows kernel calls
-BOOL IService::console_control_handler(DWORD ctrl_type)
-{
-	return instance_->_console_control_handler(ctrl_type);
-}
-
-DWORD IService::service_control_handler(DWORD service_control, DWORD event_type, LPVOID event_data, LPVOID service_context)
-{
-	return reinterpret_cast<IService*>(service_context)->_service_control_handler(service_control, event_type, event_data);
-}
-
-// Actual implementation called from singleton
-BOOL IService::_console_control_handler(DWORD ctrl_type)
-{
-	// If not any exit event then ignore
-	if (!(ctrl_type == CTRL_C_EVENT || ctrl_type == CTRL_BREAK_EVENT || ctrl_type == CTRL_SHUTDOWN_EVENT))
-		return FALSE;
-
-	onStop();
-
-	return FALSE;
-}
+// -------------------------------------------------------------------

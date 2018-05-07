@@ -22,6 +22,7 @@ VOID DynamineDaemon::OnStart(DWORD argc, LPTSTR* argv)
 	// Create Daemon Thread
 	daemon_thread_ = CreateThread(NULL, NULL, LPTHREAD_START_ROUTINE(MainThread), this, NULL, NULL);
 
+	// Wait here for daemon thread to complete
 	WaitForSingleObject(daemon_thread_, INFINITE);
 
 	printf("DynamineDaemon OnStart()\n");

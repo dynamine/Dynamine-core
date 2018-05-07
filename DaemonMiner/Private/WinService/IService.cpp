@@ -5,7 +5,7 @@
 // Create our singleton instance
 IService *IService::instance_;
 
-IService::IService(PWCHAR name, PWCHAR display_name, DWORD accepted_controls, Logger* log_instance)
+IService::IService(PWCHAR name, PWCHAR display_name, DWORD accepted_controls)
 {
 	// Clear memory
 	::ZeroMemory(PVOID(&status_), sizeof(SERVICE_STATUS));
@@ -23,8 +23,6 @@ IService::IService(PWCHAR name, PWCHAR display_name, DWORD accepted_controls, Lo
 	debug_ = FALSE;
 	install_ = FALSE;
 	uninstall_ = FALSE;
-
-	logger_ = log_instance;
 
 	exit_event_ = ::CreateEvent(
 		NULL,   // Event attributes

@@ -9,7 +9,7 @@
 #include <strsafe.h>
 #include <string>
 
-#include "../Logger/Logger.h"
+#include "../Logger/Loguru.h"
 
 // Can't forward declare just wstring since it's a typedef of std:basic_string<wchar> :/
 //using namespace std;
@@ -18,7 +18,7 @@ class IService
 {
 public:
 	// Only one service object in the process
-	IService(PWCHAR name, PWCHAR display_name, DWORD accepted_controls, Logger * log_instance);
+	IService(PWCHAR name, PWCHAR display_name, DWORD accepted_controls);
 
 	virtual ~IService();
 
@@ -47,9 +47,6 @@ public:
 	BOOL IsInstall() CONST     { return install_; }
 
 	BOOL IsUninstall() CONST   { return uninstall_; }
-
-	// TODO: Implement actual logger
-	Logger* GetLogger() CONST  { return logger_; }
 
 	// -------------------------------------------------------------------
 
@@ -103,7 +100,6 @@ protected:
 	BOOL                        install_;                    // Flag to set that this run is an installation
 	BOOL                        uninstall_;                  
 	BOOL                        debug_;                      // Enables extra logging and doesn't attatch the service into dispatchTable
-	Logger*                     logger_;                     // Logger to send all the logs to
 	CRITICAL_SECTION            status_mutex_;               // Critical Section mutex
 
 private:

@@ -34,14 +34,14 @@
     <ClInclude Include="Public\WinService\IService.h">
       <Filter>Public\WinService</Filter>
     </ClInclude>
-    <ClInclude Include="Public\Logger\Logger.h">
-      <Filter>Public\Logger</Filter>
-    </ClInclude>
     <ClInclude Include="Public\WinService\DynamineDaemon.h">
       <Filter>Public\WinService</Filter>
     </ClInclude>
     <ClInclude Include="Public\Thread\Thread.h">
       <Filter>Public\Thread</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Logger\Loguru.h">
+      <Filter>Public\Logger</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

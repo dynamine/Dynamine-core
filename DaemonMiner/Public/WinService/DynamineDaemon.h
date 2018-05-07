@@ -25,6 +25,6 @@ public:
 	DynamineDaemon();
 
 protected:
-	VOID OnStart();
-	VOID OnStop();
+	VOID OnStart(DWORD argc, LPTSTR* argv) override;
+	VOID OnStop() override;
  };

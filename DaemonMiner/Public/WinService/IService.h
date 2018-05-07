@@ -18,37 +18,54 @@ class IService
 {
 public:
 	// Only one service object in the process
-	IService(CONST PWCHAR name, CONST PWCHAR display_name, CONST DWORD accepted_controls, Logger * log_instance);
+	IService(PWCHAR name, PWCHAR display_name, DWORD accepted_controls, Logger * log_instance);
 
 	virtual ~IService();
 
-	// -----------------
+	// -------------------------------------------------------------------
 	// External methods
 	BOOL Install(CONST DWORD start_type, PWSTR dependencies, PWSTR account, PWSTR password);
 
 	BOOL Uninstall();
 
-	DWORD Run();
-	// -----------------
+	DWORD Run(CONST DWORD start_type, PWSTR dependencies, PWSTR account, PWSTR password);
 
 	VOID SetStatus(DWORD status);
 
-	VOID SetStatusStopped(DWORD exit_code, BOOL specific);
+	VOID SetStatusStopped(DWORD exit_code, BOOL specific=FALSE);
 
 	VOID SetHintTime(DWORD runtime_ms);
-	VOID CheckIn();
-	BOOL IsDebug() { return debug_; }
-	Logger* GetLogger() { return logger_; }
 
-	VOID WaitForExit();
+	VOID CheckIn();
+
+	VOID WaitForExitEvent();
+
+	VOID SetExitEvent();
+
+	BOOL IsDebug() CONST       { return debug_; }
+
+	BOOL IsInstall() CONST     { return install_; }
+
+	BOOL IsUninstall() CONST   { return uninstall_; }
+
+	// TODO: Implement actual logger
+	Logger* GetLogger() CONST  { return logger_; }
+
+	// -------------------------------------------------------------------
+
+	// -------------------------------------------------------------------
+	// Implementation functions
+	virtual VOID OnStart(DWORD argc, LPTSTR* argv)                  {}
+	virtual VOID OnStop()                                           {}
+	// -------------------------------------------------------------------
 
 	// -------------------------------------------------------------------
 	// Service event handler functions to be overriden by parent class
-	virtual VOID OnShutdown()				{}
-	virtual VOID OnPause()					{}
-	virtual VOID OnContinue()				{}
-	virtual VOID OnInterrogate()			{}
-	virtual VOID OnUnknownRequest(DWORD control) {}
+	virtual VOID OnShutdown()                                       {}
+	virtual VOID OnPause()                                          {}
+	virtual VOID OnContinue()                                       {}
+	virtual VOID OnInterrogate()                                    {}
+	virtual VOID OnUnknownRequest(DWORD control)                    {}
 
 	virtual DWORD OnDeviceEvent(DWORD dbt, PDEV_BROADCAST_HDR hdr)	{ return NO_ERROR; }
 	virtual DWORD OnHardwareProfileChange(DWORD dbt)				{ return NO_ERROR; }
@@ -64,35 +81,27 @@ public:
 	virtual DWORD OnPreShutdown(LPSERVICE_PRESHUTDOWN_INFO info) { return NO_ERROR; }
 	#endif
 	// -------------------------------------------------------------------
-	virtual VOID OnStop()
-	{
-		// Update service status
-		SetStatus(SERVICE_STOP_PENDING);
-
-		// Set our exit event so the service knows to exit
-		::SetEvent(exit_event_);
-	}
+	
 
 protected:
 	// Static is called to access this function from the singleton
 	static VOID WINAPI service_main(DWORD argc, LPTSTR* argv);
 	
-
 	// Static is called to access this function from the singleton
 	static BOOL WINAPI console_control_handler(DWORD ctrl_type);
 	
-
 	static DWORD WINAPI service_control_handler(DWORD service_control, DWORD event_type, LPVOID event_data, LPVOID service_context);
 	
 	// Singleton instance
 	static IService* instance_;
 
-	
     WCHAR                       service_name_[WCHAR_MAX];    // Service name
 	WCHAR                       display_name_[WCHAR_MAX];    // Service display name
 	SERVICE_STATUS_HANDLE       status_handle_;              // Service status handle
 	HANDLE                      exit_event_;                 // Exit interrupt handle to signal the service to exit
 	SERVICE_STATUS              status_;                     // Service's status
+	BOOL                        install_;                    // Flag to set that this run is an installation
+	BOOL                        uninstall_;                  
 	BOOL                        debug_;                      // Enables extra logging and doesn't attatch the service into dispatchTable
 	Logger*                     logger_;                     // Logger to send all the logs to
 	CRITICAL_SECTION            status_mutex_;               // Critical Section mutex

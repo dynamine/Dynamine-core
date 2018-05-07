@@ -1,8 +1,77 @@
+/*
+ * class MyService: public Service
+{
+protected:
+    // The background thread that will be executing the application.
+    // This handle is owned by this class.
+    HANDLE appThread_;
+
+public:
+    // The exit code that will be set by the application thread on exit.
+    DWORD exitCode_;
+
+    // name - service name
+    MyService(
+        __in const std::wstring &name
+    )
+        : Service(name, true, true, false),
+        appThread_(INVALID_HANDLE_VALUE),
+        exitCode_(1) // be pessimistic
+    { }
+
+    ~MyService()
+    {
+        if (appThread_ != INVALID_HANDLE_VALUE) {
+            CloseHandle(appThread_);
+        }
+    }
+
+    virtual void onStart(
+        __in DWORD argc,
+        __in_ecount(argc) LPWSTR *argv)
+    {
+        setStateRunning();
+
+        // start the thread that will execute the application
+        appThread_ = CreateThread(NULL, 
+            0, // do we need to change the stack size?
+            &serviceMainFunction,
+            (LPVOID)this,
+            0, NULL);
+
+        if (appThread_ == INVALID_HANDLE_VALUE) {
+            log(WaSvcErrorSource.mkSystem(GetLastError(), 1, L"Failed to create the application thread:"),
+                Logger::SV_ERROR);
+
+            setStateStopped(1);
+            return;
+        }
+    }
+
+    virtual void onStop()
+    {
+        ... somehow tell the application thread to stop ...
+
+        DWORD status = WaitForSingleObject(appThread_, INFINITE);
+        if (status == WAIT_FAILED) {
+            log(WaSvcErrorSource.mkSystem(GetLastError(), 1, L"Failed to wait for the application thread:"),
+                Logger::SV_ERROR);
+            // presumably exitCode_ already contains some reason at this point
+        }
+
+        // exitCode_ should be set by the application thread on exit
+        setStateStopped(exitCode_);
+    }
+};
+ */
+
+
 /* ---------------------- SimpleService.hpp ---------------------- */
 /*++
 Copyright (c) 2016 Microsoft Corporation
+https://blogs.msdn.microsoft.com/sergey_babkins_blog/2016/12/28/windows-service-wrapper-in-c/
 --*/
-
+/*
 #pragma once
 #include <string>
 #include <datetimeapi.h>
@@ -105,12 +174,12 @@ private:
 	Service(const Service &);
 	void operator=(const Service &);
 };
-
+*/
 /* ---------------------- SimpleService.cpp ---------------------- */
 /*++
 Copyright (c) 2016 Microsoft Corporation
 --*/
-
+/*
 // ... use the right includes ...
 
 static ErrorMsg::MuiSource ServiceErrorSource(L"Service", NULL);
@@ -299,3 +368,5 @@ void Service::onShutdown()
 {
 	onStop();
 }
+
+*/

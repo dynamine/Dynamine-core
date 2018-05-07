@@ -5,7 +5,7 @@
 // Create our singleton instance
 IService *IService::instance_;
 
-IService::IService(CONST PWCHAR name, CONST PWCHAR display_name, CONST DWORD accepted_controls, Logger* log_instance)
+IService::IService(PWCHAR name, PWCHAR display_name, DWORD accepted_controls, Logger* log_instance)
 {
 	// Clear memory
 	::ZeroMemory(PVOID(&status_), sizeof(SERVICE_STATUS));
@@ -21,6 +21,8 @@ IService::IService(CONST PWCHAR name, CONST PWCHAR display_name, CONST DWORD acc
 	status_handle_ = NULL;
 	exit_event_ = NULL;
 	debug_ = FALSE;
+	install_ = FALSE;
+	uninstall_ = FALSE;
 
 	logger_ = log_instance;
 
@@ -197,24 +199,37 @@ Cleanup:
 	return ret;
 }
 
-DWORD IService::Run()
+DWORD IService::Run(CONST DWORD start_type, PWSTR dependencies, PWSTR account, PWSTR password)
 {
 	// Get command line arguments and set configs with them
 	int num_args = 0;
 	// Get unicode command line arguments just in case
 	LPWSTR* wchar_cmd_args = ::CommandLineToArgvW(::GetCommandLineW(), &num_args);
 	// Loop over arguments
-	for (int i = 0; i < num_args; i++) 
+	for (int i = 0; i < num_args; i++)
 	{
 		LPWSTR current_arg = wchar_cmd_args[i];
 		// If argument is a flag passed to the service then check it
-		if (current_arg[0] == L'/' || current_arg[0] == L'-') 
+		if (current_arg[0] == L'/' || current_arg[0] == L'-')
 		{
 			// If the flag is debug then set the service to debug mode
 			if (::_wcsicmp(&current_arg[1], L"debug") == 0)
 				debug_ = TRUE;
+
+			if (::_wcsicmp(&current_arg[1], L"install") == 0)
+				install_ = TRUE;
+			
+			if (::_wcsicmp(&current_arg[1], L"uninstall") == 0)
+				uninstall_ = TRUE;
+
 		}
 	}
+
+	if (install_)
+		return Install(start_type, dependencies, account, password);
+
+	if (uninstall_)
+		return Uninstall();
 
 	// If we are debugging then just run the service_main, no need to attatch to SVC manager
 	if (debug_)
@@ -248,7 +263,7 @@ VOID IService::SetStatus(DWORD status)
 	LeaveCriticalSection(&status_mutex_);
 }
 
-VOID IService::SetStatusStopped(DWORD exit_code, BOOL specific=FALSE)
+VOID IService::SetStatusStopped(DWORD exit_code, BOOL specific)
 {
 	EnterCriticalSection(&status_mutex_);
 
@@ -292,22 +307,19 @@ VOID IService::CheckIn()
 	LeaveCriticalSection(&status_mutex_);
 }
 
-VOID IService::WaitForExit()
+VOID IService::WaitForExitEvent()
 {
 	::WaitForSingleObject(exit_event_, INFINITE);
 }
 
-DWORD IService::OLDRun()
+VOID IService::SetExitEvent()
 {
-	// Service status to running
-	SetStatus(SERVICE_RUNNING); 
+	// Update service status
+	SetStatus(SERVICE_STOP_PENDING);
 
-	// Wait for the service exit event to be set before this method exits
-	
-
-	return 0;
+	// Set our exit event so the service knows to exit
+	::SetEvent(exit_event_);
 }
-
 
 
 // -------------------------------------------------------------------
@@ -338,10 +350,9 @@ DWORD IService::service_control_handler(DWORD service_control, DWORD event_type,
 // -------------------------------------------------------------------
 // Actual implementation called from singleton instance
 
-VOID IService::_service_main(DWORD argc, LPTSTR * argv)
+VOID IService::_service_main(DWORD argc, LPTSTR* argv)
 {
-	// TODO: Check if we actually need to set this since our setServiceStatus function should handle it for us
-	status_.dwCurrentState = SERVICE_START_PENDING;
+	_ASSERTE(instance_ != NULL);
 
 	if (IsDebug())
 	{
@@ -349,17 +360,20 @@ VOID IService::_service_main(DWORD argc, LPTSTR * argv)
 		::SetConsoleCtrlHandler(PHANDLER_ROUTINE(console_control_handler), TRUE);
 		_putws(L"Press Ctrl+C or Ctrl+Break to quit...");
 	}
-	else
+	if(true)
 	{
 		// register the service handler routine
-		status_handle_ = ::RegisterServiceCtrlHandlerEx(service_name_, LPHANDLER_FUNCTION_EX(service_control_handler), (LPVOID)this);
+		status_handle_ = ::RegisterServiceCtrlHandlerEx(service_name_, LPHANDLER_FUNCTION_EX(service_control_handler), (LPVOID)instance_);
 		if (status_handle_ == NULL)
+		{
 			SetStatusStopped(ERROR_INVALID_HANDLE);
 			return;
+		}
 	}
 
+	// Start the service
 	SetStatus(SERVICE_START_PENDING);
-	onStart(argc, argv);
+	OnStart(argc, argv);
 }
 
 BOOL IService::_console_control_handler(DWORD ctrl_type)
@@ -375,50 +389,54 @@ BOOL IService::_console_control_handler(DWORD ctrl_type)
 
 DWORD IService::_service_control_handler(DWORD service_control, DWORD event_type, LPVOID event_data)
 {
-	_ASSERTE(instance_ != NULL);
-
 	DWORD ret = NO_ERROR;
 
 	switch (service_control)
 	{
+	case SERVICE_CONTROL_STOP:
+		if (status_.dwControlsAccepted & SERVICE_ACCEPT_STOP) {
+			SetStatus(SERVICE_STOP_PENDING);
+			OnStop();
+		}
+		break;
 	case SERVICE_CONTROL_SHUTDOWN:
-		instance_->OnShutdown();
+		OnShutdown();
 		break;
 	case SERVICE_CONTROL_PAUSE:
-		instance_->OnPause();
+		OnPause();
 		break;
 	case SERVICE_CONTROL_CONTINUE:
-		instance_->OnContinue();
+		OnContinue();
 		break;
 	case SERVICE_CONTROL_INTERROGATE:
-		instance_->OnInterrogate();
+		OnInterrogate();
 		break;
 	case SERVICE_CONTROL_DEVICEEVENT:
-		ret = instance_->OnDeviceEvent(event_type, static_cast<PDEV_BROADCAST_HDR>(event_data));
+		ret = OnDeviceEvent(event_type, static_cast<PDEV_BROADCAST_HDR>(event_data));
 		break;
 	case SERVICE_CONTROL_HARDWAREPROFILECHANGE:
-		ret = instance_->OnHardwareProfileChange(event_type);
+		ret = OnHardwareProfileChange(event_type);
 		break;
 		// Only on WINXP or higher
 #if (_WIN32_WINNT >= _WIN32_WINNT_WINXP)
 	case SERVICE_CONTROL_SESSIONCHANGE:
-		ret = instance_->OnSessionChange(event_type, static_cast<PWTSSESSION_NOTIFICATION>(event_data));
+		ret = OnSessionChange(event_type, static_cast<PWTSSESSION_NOTIFICATION>(event_data));
 		break;
 #endif
 		// Only on WS03 or higher
 #if (_WIN32_WINNT >= _WIN32_WINNT_WS03)
 	case SERVICE_CONTROL_POWEREVENT:
-		ret = instance_->OnPowerEvent(event_type, static_cast<POWERBROADCAST_SETTING*>(event_data));
+		ret = OnPowerEvent(event_type, static_cast<POWERBROADCAST_SETTING*>(event_data));
 		break;
 #endif
 		// Only on Vista or higher
 #if (_WIN32_WINNT >= _WIN32_WINNT_VISTA)
 	case SERVICE_CONTROL_PRESHUTDOWN:
-		ret = instance_->OnPreShutdown(static_cast<LPSERVICE_PRESHUTDOWN_INFO>(event_data));
+		ret = OnPreShutdown(static_cast<LPSERVICE_PRESHUTDOWN_INFO>(event_data));
 		break;
 #endif
 	default:
-		instance_->OnUnknownRequest(service_control);
+		OnUnknownRequest(service_control);
 	}
 
 	return ret;

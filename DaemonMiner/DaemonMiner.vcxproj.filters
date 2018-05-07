@@ -44,4 +44,7 @@
       <Filter>Public\WinService</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <None Include=".gitignore" />
+  </ItemGroup>
 </Project>

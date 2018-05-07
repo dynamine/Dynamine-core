@@ -1,5 +1,6 @@
 #pragma once
 #include "IService.h"
+#include "../Thread/Thread.h"
 
 // Internal service name
 #define SERVICE_NAME L"DynamineDaemon"
@@ -23,8 +24,17 @@ class DynamineDaemon : public IService
  {
 public:
 	DynamineDaemon();
+	~DynamineDaemon();
 
 protected:
 	VOID OnStart(DWORD argc, LPTSTR* argv) override;
 	VOID OnStop() override;
+
+	VOID DaemonThread();
+
+	static DWORD WINAPI MainThread(LPVOID thread_data);
+
+private:
+	HANDLE                  daemon_thread_;         // Daemon thread handle where the actual work happens
+	int                         exit_code_;			// Windows exit code
  };

@@ -30,7 +30,7 @@ public:
 
 	DWORD Run(CONST DWORD start_type, PWSTR dependencies, PWSTR account, PWSTR password);
 
-	VOID SetStatus(DWORD status);
+	VOID SetState(DWORD status);
 
 	VOID SetStatusStopped(DWORD exit_code, BOOL specific=FALSE);
 
@@ -62,8 +62,8 @@ public:
 	// -------------------------------------------------------------------
 	// Service event handler functions to be overriden by parent class
 	virtual VOID OnShutdown()                                       {}
-	virtual VOID OnPause()                                          {}
-	virtual VOID OnContinue()                                       {}
+	virtual VOID OnPause() { SetState(SERVICE_PAUSED); }
+	virtual VOID OnContinue() { SetState(SERVICE_RUNNING); }
 	virtual VOID OnInterrogate()                                    {}
 	virtual VOID OnUnknownRequest(DWORD control)                    {}
 

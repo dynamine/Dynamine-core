@@ -23,13 +23,12 @@
     <ClCompile Include="msdn_ref.cpp" />
     <ClCompile Include="Private\WinService\DynamineDaemon.cpp" />
     <ClCompile Include="Private\WinService\IService.cpp" />
-    <ClCompile Include="Service.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Public\Logger\Logger.h" />
+    <ClInclude Include="Public\Thread\Thread.h" />
     <ClInclude Include="Public\WinService\DynamineDaemon.h" />
     <ClInclude Include="Public\WinService\IService.h" />
-    <ClInclude Include="Service.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitignore" />

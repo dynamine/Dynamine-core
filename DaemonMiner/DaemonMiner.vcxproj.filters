@@ -16,11 +16,11 @@
     <Filter Include="Public\Logger">
       <UniqueIdentifier>{07e9516a-632f-4488-8244-bfac034aa8b7}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Public\Thread">
+      <UniqueIdentifier>{0a79532b-57a6-4eac-8ac5-fd7c5e3a13eb}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Service.cpp">
-      <Filter>Private\WinService</Filter>
-    </ClCompile>
     <ClCompile Include="Private\WinService\IService.cpp">
       <Filter>Private\WinService</Filter>
     </ClCompile>
@@ -31,9 +31,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Service.h">
-      <Filter>Public\WinService</Filter>
-    </ClInclude>
     <ClInclude Include="Public\WinService\IService.h">
       <Filter>Public\WinService</Filter>
     </ClInclude>
@@ -42,6 +39,9 @@
     </ClInclude>
     <ClInclude Include="Public\WinService\DynamineDaemon.h">
       <Filter>Public\WinService</Filter>
+    </ClInclude>
+    <ClInclude Include="Public\Thread\Thread.h">
+      <Filter>Public\Thread</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

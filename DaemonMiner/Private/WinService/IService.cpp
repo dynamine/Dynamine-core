@@ -231,21 +231,21 @@ DWORD IService::Run(CONST DWORD start_type, PWSTR dependencies, PWSTR account, P
 	if (uninstall_)
 		return Uninstall();
 
-	// If we are debugging then just run the service_main, no need to attatch to SVC manager
+	// If debugging as a console application we cannot attatch to the SVC_MGR so just run servce_main
 	if (debug_)
 	{
 		service_main(DWORD(num_args), wchar_cmd_args);
+		OnStop();
 	}
-	// This is the actual call that will happen that will run the service properly in windows
+	// This is what must run when the program is ran in a service context
 	else 
 	{
-		
-		SERVICE_TABLE_ENTRYW st[] =
+		SERVICE_TABLE_ENTRYW service_table[] =
 		{   
 			{ service_name_, service_main },
 			{ NULL, NULL }
 		};
-		if (::StartServiceCtrlDispatcherW(st) == 0)
+		if (::StartServiceCtrlDispatcher(service_table) == 0)
 			status_.dwWin32ExitCode = GetLastError();
 	}
 
@@ -254,7 +254,7 @@ DWORD IService::Run(CONST DWORD start_type, PWSTR dependencies, PWSTR account, P
 	return status_.dwWin32ExitCode;
 }
 
-VOID IService::SetStatus(DWORD status)
+VOID IService::SetState(DWORD status)
 {
 	EnterCriticalSection(&status_mutex_);
 
@@ -315,7 +315,7 @@ VOID IService::WaitForExitEvent()
 VOID IService::SetExitEvent()
 {
 	// Update service status
-	SetStatus(SERVICE_STOP_PENDING);
+	SetState(SERVICE_STOP_PENDING);
 
 	// Set our exit event so the service knows to exit
 	::SetEvent(exit_event_);
@@ -360,7 +360,7 @@ VOID IService::_service_main(DWORD argc, LPTSTR* argv)
 		::SetConsoleCtrlHandler(PHANDLER_ROUTINE(console_control_handler), TRUE);
 		_putws(L"Press Ctrl+C or Ctrl+Break to quit...");
 	}
-	if(true)
+	else
 	{
 		// register the service handler routine
 		status_handle_ = ::RegisterServiceCtrlHandlerEx(service_name_, LPHANDLER_FUNCTION_EX(service_control_handler), (LPVOID)instance_);
@@ -372,7 +372,7 @@ VOID IService::_service_main(DWORD argc, LPTSTR* argv)
 	}
 
 	// Start the service
-	SetStatus(SERVICE_START_PENDING);
+	SetState(SERVICE_START_PENDING);
 	OnStart(argc, argv);
 }
 
@@ -395,7 +395,7 @@ DWORD IService::_service_control_handler(DWORD service_control, DWORD event_type
 	{
 	case SERVICE_CONTROL_STOP:
 		if (status_.dwControlsAccepted & SERVICE_ACCEPT_STOP) {
-			SetStatus(SERVICE_STOP_PENDING);
+			SetState(SERVICE_STOP_PENDING);
 			OnStop();
 		}
 		break;
@@ -450,11 +450,13 @@ DWORD IService::_service_control_handler(DWORD service_control, DWORD event_type
 
 VOID IService::_set_status(DWORD status)
 {
-	status_.dwCurrentState = status;
-	status_.dwCheckPoint = 0;
-	status_.dwWaitHint = 0;
+	_ASSERTE(instance_ != NULL);
 
-	::SetServiceStatus(status_handle_, &status_);
+	instance_->status_.dwCurrentState = status;
+	instance_->status_.dwCheckPoint = 0;
+	instance_->status_.dwWaitHint = 0;
+
+	::SetServiceStatus(instance_->status_handle_, &instance_->status_);
 }
 
 // -------------------------------------------------------------------

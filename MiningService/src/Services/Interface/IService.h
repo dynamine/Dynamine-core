@@ -9,7 +9,6 @@
 #include <strsafe.h>
 #include <string>
 
-
 class IService
 {
 public:

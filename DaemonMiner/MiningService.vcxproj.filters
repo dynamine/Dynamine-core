@@ -1,0 +1,41 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="msdn_ref.cpp" />
+    <ClCompile Include="src\Services\Interface\IService.cpp">
+      <Filter>src\Services\Interface</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Services\MiningService.cpp">
+      <Filter>src\Services</Filter>
+    </ClCompile>
+    <ClCompile Include="src\main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include=".gitignore" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\loguru.hpp">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Services\Interface\IService.h">
+      <Filter>src\Services\Interface</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Services\MiningService.hpp">
+      <Filter>src\Services</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="src">
+      <UniqueIdentifier>{b330ff18-cd76-4c48-844a-de92b6912218}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include">
+      <UniqueIdentifier>{238963f2-ec6f-40ea-827b-a720069ce49b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\Services">
+      <UniqueIdentifier>{4b79aa3b-1a8a-4118-97cd-3475f2bca055}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\Services\Interface">
+      <UniqueIdentifier>{44db51ee-428a-4682-aa6a-5a9bb7f3fa76}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

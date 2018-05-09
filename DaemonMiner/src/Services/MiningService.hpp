@@ -1,6 +1,5 @@
 #pragma once
-#include "IService.h"
-#include "../Thread/Thread.h"
+#include "Interface/IService.h"
 
 // Internal service name
 #define SERVICE_NAME L"DynamineDaemon"
@@ -20,11 +19,11 @@
 // The password to the service account name
 #define SERVICE_PASSWORD         NULL
 
-class DynamineDaemon : public IService
+class MiningService : public IService
  {
 public:
-	DynamineDaemon();
-	~DynamineDaemon();
+	MiningService();
+	~MiningService();
 
 protected:
 	VOID OnStart(DWORD argc, LPTSTR* argv) override;

@@ -21,6 +21,7 @@
   <ItemGroup>
     <ClCompile Include="msdn_ref.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\Network\TCPServer.cpp" />
     <ClCompile Include="src\Services\Interface\IService.cpp" />
     <ClCompile Include="src\Services\MiningService.cpp" />
   </ItemGroup>
@@ -29,6 +30,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\loguru.hpp" />
+    <ClInclude Include="src\Network\TCPServer.hpp" />
     <ClInclude Include="src\Services\Interface\IService.h" />
     <ClInclude Include="src\Services\MiningService.hpp" />
   </ItemGroup>
@@ -105,7 +107,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>include;../../Services; ../../Services/Interface;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>include;../../Services; ../../Services/Interface;../../Network;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -121,7 +123,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>include;../../Services; ../../Services/Interface;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>include;../../Services; ../../Services/Interface;../../Network;</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp14</LanguageStandard>
     </ClCompile>
     <Link>
@@ -140,7 +142,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>include;../../Services; ../../Services/Interface;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>include;../../Services; ../../Services/Interface;../../Network;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -160,7 +162,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>include;../../Services; ../../Services/Interface;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>include;../../Services; ../../Services/Interface;../../Network;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

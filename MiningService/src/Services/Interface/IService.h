@@ -1,5 +1,6 @@
 #pragma once
 
+#define _WINSOCKAPI_ // Disable windows.h including winsock
 #include <Windows.h>
 #include <winsvc.h>
 #include <tchar.h>

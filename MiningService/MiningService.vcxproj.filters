@@ -9,9 +9,6 @@
       <Filter>src\Services</Filter>
     </ClCompile>
     <ClCompile Include="src\main.cpp" />
-    <ClCompile Include="src\Network\TCPServer.cpp">
-      <Filter>src\Network</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitignore" />
@@ -29,6 +26,9 @@
     <ClInclude Include="src\Network\TCPServer.hpp">
       <Filter>src\Network</Filter>
     </ClInclude>
+    <ClInclude Include="src\Threading\thread.h">
+      <Filter>src\Threading</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="src">
@@ -45,6 +45,9 @@
     </Filter>
     <Filter Include="src\Network">
       <UniqueIdentifier>{02348230-b33f-4804-96da-053d671e0f07}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\Threading">
+      <UniqueIdentifier>{37029e65-02d9-4fcf-92c6-aeb39d650fbd}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>

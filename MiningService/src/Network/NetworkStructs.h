@@ -53,8 +53,14 @@ enum connection_status
 struct Packet
 {
 	Packet() {}
-	Packet(json body)
+	Packet(char* command, json body)
+	{
+		memcpy(this->command, command, strlen(command));
+		this->body = body;
+	}
 
+	char* command;
+	json body;
 	/*Packet(int pack_id, void* pack_data)
 	{
 		this->id = pack_id;

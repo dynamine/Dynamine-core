@@ -3,6 +3,8 @@
 #include <WinSock2.h>
 //#include <algorithm>
 #include <loguru.hpp>
+
+
 class TcpConnection
 {
 public:
@@ -40,15 +42,15 @@ protected:
 	*/
 	struct PARTIAL_PACK_1
 	{
-		unsigned char header[8];        // 8 Bytes
+		unsigned char header[8];         // 8 Bytes
 		unsigned char packet_hash[0x14]; // 20 bytes
 	};
 
 	struct PARTIAL_PACK_2
 	{
-		int id;             // 4 bytes
-		size_t data_size;    // 4 bytes
-		PVOID data;         // < 1016 bytes
+		int     id;           // 4 bytes
+		size_t  data_size;    // 4 bytes
+		PVOID   data;         // < 1016 bytes
 	};
 
 private:

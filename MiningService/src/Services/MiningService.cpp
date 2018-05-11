@@ -18,7 +18,6 @@ MiningService::MiningService()
 
 MiningService::~MiningService()
 {
-	// TODO: If this causes a heap corruption then the dtor is already being called by C++ for us
 	delete cmd_server_;
 
 	// If the daemon thread hasnt been cleaned up do it now
@@ -57,7 +56,7 @@ VOID MiningService::OnStop()
 	cmd_server_->Stop();
 
 	// Terminate command thread
-	LOG_F(INFO, "Terminating command thread....");
+	LOG_F(INFO, "Terminating command thread...");
 	TerminateThread(cmd_thread_, 0x0);
 
 	// Terminate daemon thread
@@ -98,7 +97,7 @@ VOID MiningService::DaemonThread()
 
 VOID MiningService::CommandServerThread()
 {
-	LOG_F(INFO, "Starting TCP command server on port %s", PORT);
+	LOG_F(INFO, "Starting TCP command server on port %s\n", PORT);
 	cmd_server_->Start(this, &MiningService::OnClientConnect);
 }
 
@@ -106,10 +105,28 @@ VOID MiningService::CommandServerThread()
 DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 {
 	LOG_F(INFO, "CLIENT CONNECTED!");
-	//TcpConnection 
+	TcpConnection client(client_socket);
 
+	Packet* pack;
+	Packet* resources = new Packet(PCHAR("resources"), PCHAR("{ \"resources\": {\"localhost.gpu0\": \"GTX 1080\"}}"));
 
-	closesocket(client_socket);
+	while(client_socket != INVALID_SOCKET)
+	{
+		pack = new Packet;
+		LOG_F(INFO, "Waiting to receive packet...");
+		client.RecvData(pack);
+		LOG_F(INFO, "Got: %s", pack->command);
+
+		if (strcmp(pack->command, CMD_RESOURCES) == 0)
+		{
+			client.SendData(resources);
+			LOG_F(INFO, "Sent resources");
+		}
+		delete pack;
+		Sleep(500);
+	}
+	client.Close(true);
+	LOG_F(INFO, "CLIENT DISCONNECTED");
 	return 0x0;
 }
 

@@ -1,4 +1,6 @@
 #include "TcpConnection.hpp"
+#include <iostream>
+#include <minwinbase.h>
 
 TcpConnection::TcpConnection(SOCKET socket)
 {
@@ -12,8 +14,8 @@ TcpConnection::TcpConnection(SOCKET socket)
 
 TcpConnection::~TcpConnection()
 {
-	DeleteCriticalSection(&write_mutex_);
 	Close(true);
+	DeleteCriticalSection(&write_mutex_);
 }
 
 BOOL TcpConnection::Write(PVOID data, size_t size)
@@ -77,13 +79,16 @@ VOID TcpConnection::Close(BOOL force)
 {
 	EnterCriticalSection(&write_mutex_);
 
-	if ((!force && (status == connection_writing)) || (status == connection_reading))
+	if (!force && ((status == connection_writing) || (status == connection_reading)))
 	{
 		status = connection_closing;
 		LeaveCriticalSection(&write_mutex_);
 		return;
 	}
-	closesocket(socket_fd_);
+
+	if (socket_fd_ != INVALID_SOCKET)
+		closesocket(socket_fd_);
+	
 	status = connection_closed;
 	LeaveCriticalSection(&write_mutex_);
 }
@@ -92,74 +97,29 @@ packet_accept_result TcpConnection::RecvData(Packet *pack)
 {
 	status = connection_reading;
 
-	//TODO: Implement in the future
+	// Receive encoded json as raw bytes
+	PBYTE encoded_json = new BYTE[PACKET_SIZE];
 
-	//PARTIAL_PACK_1 *partialPack1 = new PARTIAL_PACK_1;
-	//PARTIAL_PACK_2 *partialPack2 = new PARTIAL_PACK_2;
+	// Attempt to read in encoded json
+	if(!Read(encoded_json, PACKET_SIZE))
+	{
+		LOG_F(ERROR, "RecvData: Failed to receive encoded json!");
+		return packet_accept_error;
+	}
 
-	//size_t partialPack2Size = 0;
-	//unsigned char newHash[0x14];
+	// Get decoded json from bytes
+	json decoded_json = json::parse(encoded_json);
 
-	///*----------------Receive Packets---------------------*/
-	//// Receive first packet
-	//if (!Read(partialPack1, PACKET_SIZE))
-	//{
-	//	LOG_F(ERROR, "RecvData: Failed to receive partialPack1!");
-	//	return packet_accept_error;
-	//}
+	// Get command
+	std::string cmd = decoded_json["cmd"].get<std::string>();
 
-	//// Receive second packet
-	//if (!Read(partialPack2, PACKET_SIZE))
-	//{
-	//	LOG_F(ERROR, "SendData: Failed to receive partialPack2!");
-	//	return packet_accept_error;
-	//}
-	///*----------------------------------------------------*/
+	// Copy command into packet
+	strcpy_s(pack->command, cmd.length() + 1, cmd.c_str());
 
-	///*-----------------Parse Partial Pack 1---------------*/
-	//// Check to make sure the headerKey matches up
-	//for (int i = 0; i < 4; ++i)
-	//{
-	//	if (partialPack1->header[i] != headerKey[i])
-	//	{
-	//		LOG_F(ERROR, "RecvData: Failed to receive correct headerKey!");
-	//		return packet_accept_partial;
-	//	}
-	//}
-	//// Get the size of the second packet
-	//partialPack2Size = (partialPack1->header[4] << 24) |
-	//	(partialPack1->header[5] << 16) |
-	//	(partialPack1->header[6] << 8) |
-	//	partialPack1->header[7];
+	// Copy body into packet
+	pack->data = json::parse(decoded_json["data"].dump());
 
-	//// Populate packet with the data from the first packet
-	//memcpy(pack->header, partialPack1->header, 0x8);
-	//memcpy(pack->dataHash, partialPack1->packet_hash, 0x14);
-	//pack->dataSize = partialPack2Size - 0x8;
-	///*----------------------------------------------------*/
-
-	///*-----------------Parse Partial Pack 2---------------*/
-	//// Get hash of the second packet
-	//tools::DoSha1(partialPack2, partialPack2Size, newHash);
-
-	//// Compare hashes to make sure the data isn't corrupt or tampered with
-	//if (memcpy(pack->dataHash, newHash, 0x14) != 0)
-	//{
-	//	Output::GetInstance().ErrPrint("RecvData: DataHashes did not match!");
-	//	return packet_accept_error;
-	//}
-
-	//// Decrypt data and store in packet
-	//tools::DoRc4(partialPack2->data, partialPack2->data_size, pack->data);
-
-	//// Store id and size of data from second packet in main packet
-	//pack->id = partialPack2->id;
-	//pack->dataSize = partialPack2->data_size;
-	///*----------------------------------------------------*/
-
-	//delete partialPack1;
-	//delete partialPack2;
-
+	// Set status to ready
 	status = connection_open;
 
 	return packet_accept_success;
@@ -169,62 +129,27 @@ BOOL TcpConnection::SendData(Packet *pack)
 {
 	status = connection_writing;
 
-	//PARTIAL_PACK_1 *partialPack1 = new PARTIAL_PACK_1;
-	//PARTIAL_PACK_2 *partialPack2 = new PARTIAL_PACK_2;
+	json json_response = json({
+	
+		});;
 
-	//size_t partialPack2Size = 0;
+	json data = pack->data;
 
-	///*----------------Setup Second Packet----------------*/
-	//// Set our id
-	//partialPack2->id = pack->id;
+	json_response["cmd"] = std::string(pack->command);
+	json_response["data"] = data.dump();
 
-	//// Set our data_size
-	//partialPack2->data_size = pack->dataSize;
+	std::string jserial = json_response.dump();
 
-	//// Encrypt the data
-	//tools::DoRc4(pack->data, pack->dataSize, partialPack2->data);
-	///*---------------------------------------------------*/
+	BYTE jpacket[PACKET_SIZE];
+	ZeroMemory(&jpacket, PACKET_SIZE);
 
+	memcpy(jpacket, jserial.data(), jserial.length());
 
-	///*---------------Setup First Packet------------------*/
-	//// Setup the size of the second packet
-	//partialPack2Size = pack->dataSize + 0x8;
-
-	//// Populate first 4 bytes of header with auth Key
-	//for (int i = 0; i < 4; ++i)
-	//{
-	//	partialPack1->header[i] = headerKey[i];
-	//}
-
-	//// Populate next 4 bytes of header with big endian size of data
-	//partialPack1->header[4] = (partialPack2Size & 0xFF000000) >> 24;
-	//partialPack1->header[5] = (partialPack2Size & 0xFF0000) >> 16;
-	//partialPack1->header[6] = (partialPack2Size & 0xFF00) >> 8;
-	//partialPack1->header[7] = (partialPack2Size & 0xFF);
-
-	//// Populate packet_hash in packet
-	//tools::DoSha1(partialPack2, partialPack2Size, partialPack1->packet_hash);
-	///*----------------------------------------------------*/
-
-
-	///*----------------Send Packets------------------------*/
-	//// Send first packet
-	//if (!Write(partialPack1, PACKET_SIZE))
-	//{
-	//	Output::GetInstance().ErrPrint("SendData: Failed to send partialPack1!");
-	//	return false;
-	//}
-
-	//// Send second packet
-	//if (!Write(partialPack2, PACKET_SIZE))
-	//{
-	//	Output::GetInstance().ErrPrint("SendData: Failed to send partialPack2!");
-	//	return false;
-	//}
-	///*----------------------------------------------------*/
-
-	//delete partialPack1;
-	//delete partialPack2;
+	if (!Write(jpacket, PACKET_SIZE))
+	{
+		LOG_F(ERROR, "SendData: Failed to send data!");
+		return false;
+	}
 
 	status = connection_open;
 

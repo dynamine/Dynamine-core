@@ -36,6 +36,7 @@
     <ClInclude Include="src\Services\Interface\IService.h" />
     <ClInclude Include="src\Services\MiningService.hpp" />
     <ClInclude Include="src\Threading\thread.h" />
+    <ClInclude Include="Tools.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>

@@ -28,13 +28,15 @@ using namespace nlohmann;
 // Command server port
 #define PORT  "4001"
 
-CONST BYTE CMD_START_MINER[MAXCHAR] = "start-miner";
-CONST BYTE CMD_STOP_MINER[MAXCHAR] = "stop-miner";
-CONST BYTE CMD_RESOURCES[MAXCHAR] = "resources";
-CONST BYTE CMD_STATS[MAXCHAR] = "stats";
+static const char* CMD_START_MINER = "start-miner";
+static const char* CMD_STOP_MINER  =  "stop-miner";
+static const char* CMD_RESOURCES   =  "resources";
+static const char* CMD_STATS       =  "stats";
 
 class MiningService : public IService
  {
+
+
 public:
 	MiningService();
 	~MiningService();

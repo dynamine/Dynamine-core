@@ -45,25 +45,16 @@ enum connection_status
 * receive the large chunk of data if the id and header are correct. */
 struct Packet
 {
-	Packet() {}
-	Packet(char* command, json body)
+	Packet() { this->command = new char[CHAR_MAX];  }
+	Packet(char* command, char* data)
 	{
-		memcpy(this->command, command, strlen(command));
-		this->body = body;
+		this->command = new char[CHAR_MAX];
+		memcpy(this->command, command, strlen(command)+1);
+		this->command[strlen(this->command)] = '\0';
+
+		this->data = json::parse(data);
 	}
 
 	char* command;
-	json body;
-	/*Packet(int pack_id, void* pack_data)
-	{
-		this->id = pack_id;
-		this->data = pack_data;
-	}
-
-	int id;                             // 4 bytes      | Needs to be populated
-	unsigned char header[0x8];          // 8 bytes      | Generated on send
-	unsigned char dataHash[0x14];       // 20 bytes     | Generated on send
-	size_t dataSize;                    // 4 bytes      | Needs to be populated
-	void* data;                         // < 1016 bytes | Needs to be populated
-	*/
+	json data;
 };

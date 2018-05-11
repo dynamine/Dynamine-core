@@ -38,6 +38,9 @@
     <ClInclude Include="src\Network\NetworkStructs.h">
       <Filter>src\Network</Filter>
     </ClInclude>
+    <ClInclude Include="Tools.h">
+      <Filter>src\Tools</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="src">
@@ -57,6 +60,9 @@
     </Filter>
     <Filter Include="src\Threading">
       <UniqueIdentifier>{37029e65-02d9-4fcf-92c6-aeb39d650fbd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\Tools">
+      <UniqueIdentifier>{54837302-9b06-4620-9bca-61ffad1bb943}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>

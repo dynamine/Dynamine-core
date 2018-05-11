@@ -8,25 +8,18 @@
 // Need to link with Ws2_32.lib
 #pragma comment (lib, "Ws2_32.lib")
 
-struct ThreadData
-{
-	LPVOID instance;
-	SOCKET client_socket;
-};
-
-// Thread Procedure wrapper to eliminate boiler plate in class
-template<class T, DWORD(__stdcall T::*F)()>
-DWORD CALLBACK ThreadProc(LPVOID data)
-{
-	ThreadData* td = static_cast<ThreadData*>(data);
-	return ((reinterpret_cast<T*>(td->instance))->*F)(td->client_socket);
-}
-
 template<class Owner>
 class TcpServer
 {
-	// OnClientConnect function that T must have
-	typedef DWORD(Owner::* OnClientConnect)(SOCKET);
+	// OnClientConnect function that Owner must have
+	typedef DWORD (WINAPI Owner::*OnClientConnect)(SOCKET);
+
+	struct ThreadData
+	{
+		Owner* instance;
+		OnClientConnect callback;
+		SOCKET client_socket;
+	};
 
 public:
 	TcpServer(PCSTR port)
@@ -43,7 +36,7 @@ public:
 		// Setup WSA data
 		if (WSAStartup(MAKEWORD(2, 2), &wsa_data_) != 0)
 		{
-			LOG_F(ERROR, "WSAStartup Failure: %08X\n", WSAGetLastError());
+			LOG_F(ERROR, "WSAStartup Failure: %08X", WSAGetLastError());
 			goto FAILED;
 		}
 
@@ -58,21 +51,21 @@ public:
 		// however this is a safer route to go since hostname finding is not guranteed
 		if ((getaddrinfo(NULL, port, &socket_addrhints_, &socket_addrinfo_)) != 0)
 		{
-			LOG_F(ERROR, "getaddrinfo() Failure: %08X\n", GetLastError());
+			LOG_F(ERROR, "getaddrinfo() Failure: %08X", GetLastError());
 			goto FAILED;
 		}
 
 		// Create our server socket
 		if ((server_socket_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) == INVALID_SOCKET)
 		{
-			LOG_F(ERROR, "ServerSocket creation failed: %08X\n", WSAGetLastError());
+			LOG_F(ERROR, "ServerSocket creation failed: %08X", WSAGetLastError());
 			goto FAILED;
 		}
 
 		// Bind socket to hostname:port
 		if ((bind(server_socket_, socket_addrinfo_->ai_addr, int(socket_addrinfo_->ai_addrlen))) == SOCKET_ERROR)
 		{
-			LOG_F(ERROR, "Failed to bind to 0.0.0.0:%s with error: %08X\n", port, WSAGetLastError());
+			LOG_F(ERROR, "Failed to bind to 0.0.0.0:%s with error: %08X", port, WSAGetLastError());
 			goto FAILED;
 		}
 
@@ -93,12 +86,19 @@ public:
 		DeleteCriticalSection(&mutex_);
 	}
 
-	VOID Start(Owner* owner, DWORD(Owner::*OnClientConnect)(SOCKET))
+	static DWORD WINAPI ThreadOnClientConnect(LPVOID data)
+	{
+		ThreadData* td = static_cast<ThreadData*>(data);
+
+		return (td->instance->*td->callback)(td->client_socket);
+	}
+
+	VOID Start(Owner* owner, OnClientConnect client_connect)
 	{
 		// Start listening on socket for requests
 		if ((listen(server_socket_, SOMAXCONN)) == SOCKET_ERROR)
 		{
-			LOG_F(ERROR, "Listening on socket failed with: %08X\n", WSAGetLastError());
+			LOG_F(ERROR, "Listening on socket failed with: %08X", WSAGetLastError());
 			goto FAILED;
 		}
 
@@ -115,9 +115,9 @@ public:
 			ThreadData* thread_data = new ThreadData;
 			thread_data->instance = owner;
 			thread_data->client_socket = client_socket;
-
+			thread_data->callback = client_connect;
 			// Handle the client socket and let the server forget about it
-			HANDLE handle = CreateThread(NULL, NULL, ThreadProc<owner, &Owner::OnClientConnect>, thread_data, NULL, NULL);
+			HANDLE handle = CreateThread(NULL, NULL, ThreadOnClientConnect, LPVOID(thread_data), NULL, NULL);
 			CloseHandle(handle);
 		}
 

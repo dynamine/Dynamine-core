@@ -1,6 +1,4 @@
 #include "TcpConnection.hpp"
-#include <algorithm>
-#include <loguru.hpp>
 
 TcpConnection::TcpConnection(SOCKET socket)
 {
@@ -79,14 +77,15 @@ VOID TcpConnection::Close(BOOL force)
 {
 	EnterCriticalSection(&write_mutex_);
 
-	if ((!force && (status == connection_writing)) || ((status == connection_reading)))
+	if ((!force && (status == connection_writing)) || (status == connection_reading))
 	{
 		status = connection_closing;
 		LeaveCriticalSection(&write_mutex_);
 		return;
 	}
-
+	closesocket(socket_fd_);
 	status = connection_closed;
+	LeaveCriticalSection(&write_mutex_);
 }
 
 packet_accept_result TcpConnection::RecvData(Packet *pack)

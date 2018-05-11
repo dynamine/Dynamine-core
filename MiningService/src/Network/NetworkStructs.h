@@ -1,5 +1,4 @@
 #pragma once
-#include <ws2def.h>
 #include <json.hpp>
 
 using namespace nlohmann;
@@ -15,12 +14,6 @@ static unsigned char SECURITY_KEY[16] =
 };
 
 const unsigned char headerKey[4] = { 'U', '3', 'R', '0' };
-
-struct SocketInfo
-{
-	int                    socket;
-	struct sockaddr_in     socket_addr;
-};
 
 enum packet_accept_result
 {

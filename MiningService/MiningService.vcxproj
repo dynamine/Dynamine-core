@@ -21,6 +21,7 @@
   <ItemGroup>
     <ClCompile Include="msdn_ref.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\Network\TcpConnection.cpp" />
     <ClCompile Include="src\Services\Interface\IService.cpp" />
     <ClCompile Include="src\Services\MiningService.cpp" />
   </ItemGroup>
@@ -29,7 +30,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\loguru.hpp" />
-    <ClInclude Include="src\Network\TCPServer.hpp" />
+    <ClInclude Include="src\Network\NetworkStructs.h" />
+    <ClInclude Include="src\Network\TcpConnection.hpp" />
+    <ClInclude Include="src\Network\TcpServer.hpp" />
     <ClInclude Include="src\Services\Interface\IService.h" />
     <ClInclude Include="src\Services\MiningService.hpp" />
     <ClInclude Include="src\Threading\thread.h" />

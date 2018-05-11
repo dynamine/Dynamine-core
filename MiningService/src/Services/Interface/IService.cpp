@@ -65,7 +65,7 @@ BOOL IService::Install(CONST DWORD start_type, PWSTR dependencies, PWSTR account
 
 	if (GetModuleFileName(NULL, path, MAX_PATH) == 0)
 	{
-		wprintf(L"GetModuleFileName failed w/err 0x%08lx\n", GetLastError());
+		LOG_F(ERROR, "GetModuleFileName failed w/err 0x%08lx", GetLastError());
 		goto Cleanup;
 	}
 
@@ -73,7 +73,7 @@ BOOL IService::Install(CONST DWORD start_type, PWSTR dependencies, PWSTR account
 	service_manager = OpenSCManager(NULL, NULL, SC_MANAGER_CONNECT | SC_MANAGER_CREATE_SERVICE);
 	if (service_manager == NULL) 
 	{
-		wprintf(L"OpenSCManager failed w/err 0x%08lx\n", GetLastError());
+		LOG_F(ERROR, "OpenSCManager failed w/err 0x%08lx", GetLastError());
 		goto Cleanup;
 	}
 
@@ -96,12 +96,12 @@ BOOL IService::Install(CONST DWORD start_type, PWSTR dependencies, PWSTR account
 
 	if (service == NULL)
 	{
-		wprintf(L"CreateService failed w/err 0x%08lx\n", GetLastError());
+		LOG_F(ERROR, "CreateService failed w/err 0x%08lx", GetLastError());
 		goto Cleanup;
 	}
 
 	ret = TRUE;
-	wprintf(L"%s is installed.\n", service_name_);
+	LOG_F(ERROR, "%s is installed.", service_name_);
 
 Cleanup:
 	// Centralized cleanup for all allocated resources.
@@ -130,7 +130,7 @@ BOOL IService::Uninstall()
 	service_manager = OpenSCManager(NULL, NULL, SC_MANAGER_CONNECT);
 	if (service_manager == NULL)
 	{
-		wprintf(L"OpenSCManager failed w/err 0x%08lx\n", GetLastError());
+		LOG_F(ERROR, "OpenSCManager failed w/err 0x%08lx", GetLastError());
 		goto Cleanup;
 	}
 
@@ -143,14 +143,14 @@ BOOL IService::Uninstall()
 
 	if (service == NULL)
 	{
-		wprintf(L"OpenService failed w/err 0x%08lx\n", GetLastError());
+		LOG_F(ERROR, "OpenService failed w/err 0x%08lx", GetLastError());
 		goto Cleanup;
 	}
 
 	// Try to stop the service
 	if (ControlService(service, SERVICE_CONTROL_STOP, &service_status))
 	{
-		wprintf(L"Stopping %s.", service_name_);
+		LOG_F(INFO, "Stopping %s.", service_name_);
 		Sleep(1000);
 
 		while (QueryServiceStatus(service, &service_status))
@@ -164,24 +164,20 @@ BOOL IService::Uninstall()
 		}
 
 		if (service_status.dwCurrentState == SERVICE_STOPPED)
-		{
-			wprintf(L"\n%s is stopped.\n", service_name_);
-		}
+			LOG_F(INFO, "%s is stopped.", service_name_);
 		else
-		{
-			wprintf(L"\n%s failed to stop.\n", service_name_);
-		}
+			LOG_F(ERROR, "%s failed to stop.", service_name_);
 	}
 
 	// Now remove the service by calling DeleteService.
 	if (!DeleteService(service))
 	{
-		wprintf(L"DeleteService failed w/err 0x%08lx\n", GetLastError());
+		LOG_F(INFO, "DeleteService failed w/err 0x%08lx", GetLastError());
 		goto Cleanup;
 	}
 
 	ret = TRUE;
-	wprintf(L"%s is removed.\n", service_name_);
+	LOG_F(INFO, "%s is removed.", service_name_);
 
 Cleanup:
 	// Centralized cleanup for all allocated resources.
@@ -357,7 +353,7 @@ VOID IService::_service_main(DWORD argc, LPTSTR* argv)
 	{
 		// Register the console control handler
 		::SetConsoleCtrlHandler(PHANDLER_ROUTINE(console_control_handler), TRUE);
-		_putws(L"Press Ctrl+C or Ctrl+Break to quit...");
+		LOG_F(INFO, "Press Ctrl+C or Ctrl+Break to quit...");
 	}
 	else
 	{

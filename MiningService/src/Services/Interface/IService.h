@@ -9,6 +9,7 @@
 #include <cstdarg>
 #include <strsafe.h>
 #include <string>
+#include <loguru.hpp>
 
 class IService
 {

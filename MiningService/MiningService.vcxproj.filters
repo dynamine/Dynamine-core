@@ -9,6 +9,9 @@
       <Filter>src\Services</Filter>
     </ClCompile>
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\Network\TcpConnection.cpp">
+      <Filter>src\Network</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitignore" />
@@ -23,11 +26,17 @@
     <ClInclude Include="src\Services\MiningService.hpp">
       <Filter>src\Services</Filter>
     </ClInclude>
-    <ClInclude Include="src\Network\TCPServer.hpp">
-      <Filter>src\Network</Filter>
-    </ClInclude>
     <ClInclude Include="src\Threading\thread.h">
       <Filter>src\Threading</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Network\TcpServer.hpp">
+      <Filter>src\Network</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Network\TcpConnection.hpp">
+      <Filter>src\Network</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Network\NetworkStructs.h">
+      <Filter>src\Network</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

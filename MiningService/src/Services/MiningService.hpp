@@ -39,18 +39,21 @@ public:
 	MiningService();
 	~MiningService();
 
+	DWORD WINAPI OnClientConnect(SOCKET client_socket);
+
 protected:
 	VOID OnStart(DWORD argc, LPTSTR* argv) override;
 	VOID OnStop() override;
 
 	VOID DaemonThread();
+	VOID CommandServerThread();
 
-	DWORD OnClientConnect(SOCKET client_socket);
-
-	static DWORD WINAPI MainThread(LPVOID thread_data);
+	static DWORD WINAPI MiningThread(LPVOID thread_data);
+	static DWORD WINAPI CommandThread(LPVOID thread_data);
 
 private:
+	HANDLE                           cmd_thread_;         // Command thread handle where commands to control daemon thread occur
 	HANDLE                        daemon_thread_;         // Daemon thread handle where the actual work happens
-	int                               exit_code_;			// Windows exit code
+	int                               exit_code_;	      // Windows exit code
 	TcpServer<MiningService>*        cmd_server_;         // Command TCP Server to communicate with the daemon
  };

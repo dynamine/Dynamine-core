@@ -1,7 +1,8 @@
 #pragma once
 #include "NetworkStructs.h"
 #include <WinSock2.h>
-
+//#include <algorithm>
+#include <loguru.hpp>
 class TcpConnection
 {
 public:

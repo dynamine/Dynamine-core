@@ -66,6 +66,14 @@ VOID MiningService::OnStop()
 	LOG_F(INFO, "MiningService OnStop() Completed");
 }
 
+DWORD MiningService::MinerThreadProxy(LPVOID thread_data)
+{
+	auto parent = static_cast<MiningService*>(thread_data);
+
+	parent->MinerThread();
+	return 0;
+}
+
 DWORD WINAPI MiningService::MiningThread(LPVOID thread_data)
 {
 	auto parent = static_cast<MiningService*>(thread_data);
@@ -95,6 +103,11 @@ VOID MiningService::DaemonThread()
 	for(;;) {}
 }
 
+VOID MiningService::MinerThread()
+{
+	
+}
+
 VOID MiningService::CommandServerThread()
 {
 	LOG_F(INFO, "Starting TCP command server on port %s\n", PORT);
@@ -108,10 +121,12 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 	TcpConnection client(client_socket);
 
 	Packet* pack;
-	Packet* resources = new Packet(PCHAR("resources"), PCHAR("{ \"resources\": {\"localhost.gpu0\": \"GTX 1080\"}}"));
+	Packet* resources = new Packet(PCHAR("resources"), PCHAR("{ \"resources\": [\"localhost.gpu0.GTX1080\"] }"));
+	Packet* stats = new Packet(PCHAR("hashRate"), PCHAR("{}"));
 
 	while(client_socket != INVALID_SOCKET)
 	{
+		// TODO: fix json null data being sent at the end
 		pack = new Packet;
 		LOG_F(INFO, "Waiting to receive packet...");
 		client.RecvData(pack);
@@ -122,11 +137,33 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 			client.SendData(resources);
 			LOG_F(INFO, "Sent resources");
 		}
+
+		if(strcmp(pack->command, CMD_STATS) == 0)
+		{
+			int rnum = rand() % 2000 + 1000;
+			stats->data = json({
+				{"resource", "localhost.gpu0.GTX1080"},
+				{"hashRate", std::to_string(rnum)}
+				});
+			client.SendData(stats);
+			LOG_F(INFO, "Sent hashRate");
+		}
+
+		if(strcmp(pack->command, CMD_START_MINER) == 0)
+		{
+			MinerThreadProxy(this);
+			LOG_F(INFO, "Started mining");
+		}
+
 		delete pack;
 		Sleep(500);
 	}
 	client.Close(true);
 	LOG_F(INFO, "CLIENT DISCONNECTED");
+
+	delete resources;
+	delete stats;
+
 	return 0x0;
 }
 

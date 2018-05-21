@@ -55,6 +55,15 @@ struct Packet
 		this->data = json::parse(data);
 	}
 
+	Packet(char* command, json j)
+	{
+		this->command = new char[CHAR_MAX];
+		memcpy(this->command, command, strlen(command) + 1);
+		this->command[strlen(this->command)] = '\0';
+
+		this->data = j;
+	}
+
 	char* command;
 	json data;
 };

@@ -31,6 +31,7 @@
   <ItemGroup>
     <ClInclude Include="include\loguru.hpp" />
     <ClInclude Include="src\Network\NetworkStructs.h" />
+    <ClInclude Include="src\Network\TcpClient.hpp" />
     <ClInclude Include="src\Network\TcpConnection.hpp" />
     <ClInclude Include="src\Network\TcpServer.hpp" />
     <ClInclude Include="src\Services\Interface\IService.h" />

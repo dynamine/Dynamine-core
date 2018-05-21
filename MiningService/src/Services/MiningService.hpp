@@ -73,7 +73,7 @@ protected:
 	DWORD WINAPI MinerDispatchThread(SOCKET client_socket);
 
 	// Miner thread that holds the process to the miner
-	VOID MinerThread();
+	VOID MinerThread(PCHAR command);
 
 	// Handles TCP commands and runs the tcp server
 	VOID CommandServerThread();

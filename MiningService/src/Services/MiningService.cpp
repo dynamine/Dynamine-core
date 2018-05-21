@@ -2,6 +2,8 @@
 #include "../Network/TcpConnection.hpp"
 #include "../Network/TcpClient.hpp"
 
+#include <iostream>
+
 MiningService::MiningService()
 	: IService(PWSTR(SERVICE_NAME), PWSTR(DISPLAY_NAME), SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN | SERVICE_ACCEPT_PAUSE_CONTINUE)
 {
@@ -88,9 +90,9 @@ PCHAR* MiningService::GetDevices()
 
 DWORD WINAPI MiningService::MinerThreadProxy(LPVOID thread_data)
 {
-	auto parent = static_cast<MiningService*>(thread_data);
+	MinerThreadData* data = static_cast<MinerThreadData*>(thread_data);
 
-	parent->MinerThread();
+	data->instance->MinerThread(data->command);
 	return 0;
 }
 
@@ -142,7 +144,7 @@ DWORD WINAPI MiningService::MinerDispatchThread(SOCKET client_socket)
 	return 0x0;
 }
 
-VOID MiningService::MinerThread()
+VOID MiningService::MinerThread(PCHAR command)
 {
 	
 }
@@ -214,6 +216,12 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 
 		if(strcmp(pack->command, CMD_START_MINER) == 0)
 		{
+
+			std::string resource = pack->data["resource"].dump();
+			std::string miner = pack->data["miner"].dump();
+			std::map<std::string, std::string> miner_args = pack->data["miner_args"].get<std::map<std::string, std::string>>();
+
+			std::cout << miner_args << std::endl;
 			miner_com.SendData(pack);
 			miner_com.RecvData(recvpack);
 			client.SendData(start);

@@ -37,7 +37,7 @@ public:
 			goto FAILED;
 		}
 
-		// TODO: Fgur eout how to specify hostname
+		// TODO: Figure out how to specify hostname
 		ZeroMemory(&socket_addrhints_, sizeof(struct addrinfo));
 		socket_addrhints_.ai_family = AF_INET;
 		socket_addrhints_.ai_socktype = SOCK_STREAM;

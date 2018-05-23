@@ -38,11 +38,11 @@
     <ClInclude Include="src\Network\NetworkStructs.h">
       <Filter>src\Network</Filter>
     </ClInclude>
-    <ClInclude Include="Tools.h">
-      <Filter>src\Tools</Filter>
-    </ClInclude>
     <ClInclude Include="src\Network\TcpClient.hpp">
       <Filter>src\Network</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Tools\Tools.h">
+      <Filter>src\Tools</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

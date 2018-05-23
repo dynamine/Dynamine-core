@@ -1,4 +1,5 @@
 #include "IService.h"
+#include "../../Tools/Tools.h"
 
 // TODO: Check if we can nil this
 #pragma comment(lib, "advapi32.lib")
@@ -6,7 +7,7 @@
 // Create our singleton instance
 IService *IService::instance_;
 
-IService::IService(PWCHAR name, PWCHAR display_name, DWORD accepted_controls)
+IService::IService(PTCHAR name, PTCHAR display_name, DWORD accepted_controls)
 {
 	// Clear memory
 	::ZeroMemory(PVOID(&status_), sizeof(SERVICE_STATUS));
@@ -16,8 +17,8 @@ IService::IService(PWCHAR name, PWCHAR display_name, DWORD accepted_controls)
 	// Initialize variables
 	InitializeCriticalSection(&status_mutex_);
 
-	::wcscpy_s(service_name_, name);
-	::wcscpy_s(display_name_, display_name);
+	::strcpy_s(service_name_, name);
+	::strcpy_s(display_name_, display_name);
 
 	status_handle_ = NULL;
 	exit_event_ = NULL;
@@ -56,7 +57,7 @@ IService::~IService()
 	DeleteCriticalSection(&status_mutex_);
 }
 
-BOOL IService::Install(CONST DWORD start_type, PWSTR dependencies, PWSTR account, PWSTR password)
+BOOL IService::Install(CONST DWORD start_type, PTSTR dependencies, PTSTR account, PTSTR password)
 {
 	TCHAR path[MAX_PATH];
 	SC_HANDLE service_manager = NULL;
@@ -157,7 +158,7 @@ BOOL IService::Uninstall()
 		{
 			if (service_status.dwCurrentState == SERVICE_STOP_PENDING)
 			{
-				wprintf(L".");
+				printf(".");
 				Sleep(1000);
 			}
 			else break;
@@ -194,27 +195,27 @@ Cleanup:
 	return ret;
 }
 
-DWORD IService::Run(CONST DWORD start_type, PWSTR dependencies, PWSTR account, PWSTR password)
+DWORD IService::Run(CONST DWORD start_type, PTSTR dependencies, PTSTR account, PTSTR password)
 {
 	// Get command line arguments and set configs with them
 	int num_args = 0;
 	// Get unicode command line arguments just in case
-	LPWSTR* wchar_cmd_args = ::CommandLineToArgvW(::GetCommandLineW(), &num_args);
+	LPTSTR* tchar_cmd_args = ::CommandLineToArgvA(::GetCommandLineA(), &num_args);
 	// Loop over arguments
 	for (int i = 0; i < num_args; i++)
 	{
-		LPWSTR current_arg = wchar_cmd_args[i];
+		LPTSTR current_arg = tchar_cmd_args[i];
 		// If argument is a flag passed to the service then check it
 		if (current_arg[0] == L'/' || current_arg[0] == L'-')
 		{
 			// If the flag is debug then set the service to debug mode
-			if (::_wcsicmp(&current_arg[1], L"debug") == 0)
+			if (::_strcmpi(&current_arg[1], "debug") == 0)
 				debug_ = TRUE;
 
-			if (::_wcsicmp(&current_arg[1], L"install") == 0)
+			if (::_strcmpi(&current_arg[1], "install") == 0)
 				install_ = TRUE;
 			
-			if (::_wcsicmp(&current_arg[1], L"uninstall") == 0)
+			if (::_strcmpi(&current_arg[1], "uninstall") == 0)
 				uninstall_ = TRUE;
 
 		}
@@ -229,13 +230,13 @@ DWORD IService::Run(CONST DWORD start_type, PWSTR dependencies, PWSTR account, P
 	// If debugging as a console application we cannot attatch to the SVC_MGR so just run servce_main
 	if (debug_)
 	{
-		service_main(DWORD(num_args), wchar_cmd_args);
+		service_main(DWORD(num_args), tchar_cmd_args);
 		OnStop();
 	}
 	// This is what must run when the program is ran in a service context
 	else 
 	{
-		SERVICE_TABLE_ENTRYW service_table[] =
+		SERVICE_TABLE_ENTRY service_table[] =
 		{   
 			{ service_name_, service_main },
 			{ NULL, NULL }
@@ -244,7 +245,7 @@ DWORD IService::Run(CONST DWORD start_type, PWSTR dependencies, PWSTR account, P
 			status_.dwWin32ExitCode = GetLastError();
 	}
 
-	::LocalFree(wchar_cmd_args);
+	::LocalFree(tchar_cmd_args);
 
 	return status_.dwWin32ExitCode;
 }

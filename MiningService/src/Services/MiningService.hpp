@@ -11,19 +11,19 @@
 using namespace nlohmann;
 
 // Internal service name
-#define SERVICE_NAME L"DynamineDaemon"
+#define SERVICE_NAME "DynamineDaemon"
 
 // External service name
-#define DISPLAY_NAME L"Dynamine Mining Daemon"
+#define DISPLAY_NAME "Dynamine Mining Daemon"
 
 // Service start options
 #define SERVICE_START_TYPE       SERVICE_DEMAND_START
 
 // List of service dependencies - "dep1\0dep2\0\0"
-#define SERVICE_DEPENDENCIES     L""
+#define SERVICE_DEPENDENCIES     ""
 
 // The name of the account under which the service should run
-#define SERVICE_ACCOUNT          L"NT AUTHORITY\\LocalService"
+#define SERVICE_ACCOUNT          "NT AUTHORITY\\LocalService"
 
 // The password to the service account name
 #define SERVICE_PASSWORD         NULL
@@ -43,17 +43,26 @@ class MiningService : public IService
  {
 	struct Miner
 	{
-		PCHAR                        command;   // start, stop, restart etc.
-		PCHAR                       resource;  // localhost.gpu0
-		PCHAR                          state;
-		HANDLE                 thread_handle;
-		PROCESS_INFORMATION*   miner_process;
+		PTSTR                        command;  // command to run the miner
+		PTSTR                       resource;  // localhost.gpu0
+		PTSTR                          state;  // stopped, running
+		HANDLE                        thread;  // handle to process thread
+		PROCESS_INFORMATION*         process;  // Process info
+		PTSTR                    api_gateway;  // http://localhost:4004
+
+		~Miner()
+		{
+			free(command);
+			free(resource);
+			free(state);
+			free(api_gateway);
+		}
 	};
 
 	struct MinerThreadData
 	{
 		MiningService* instance;    // The current instance of mining service to be ran
-		PCHAR command;              // The entire miner command formatted to run as a Process
+		Miner* miner;              // The entire miner command formatted to run as a Process
 	};
 
 public:
@@ -66,6 +75,8 @@ protected:
 	VOID OnStart(DWORD argc, LPTSTR* argv) override;
 	VOID OnStop() override;
 
+	BOOL StartMiner(Miner* miner);
+
 	PCHAR* GetDevices();
 
 	// Controls different instances of coin miner processes and
@@ -73,11 +84,12 @@ protected:
 	DWORD WINAPI MinerDispatchThread(SOCKET client_socket);
 
 	// Miner thread that holds the process to the miner
-	VOID MinerThread(PCHAR command);
+	VOID MinerThread(Miner* miner);
 
 	// Handles TCP commands and runs the tcp server
 	VOID CommandServerThread();
 
+	// TODO: Deprecate this tcp server
 	// Miner communication server thread that runs the TCP server
 	VOID MinerComThread();
 
@@ -92,7 +104,7 @@ private:
 	int                               exit_code_;	      // Windows exit code
 	TcpServer<MiningService>*        cmd_server_;         // Command TCP Server to communicate with the daemon
 	TcpServer<MiningService>*  miner_cmd_server_;         // It sucks but this will let us scale for now
-	CRITICAL_SECTION					  mutex_;         // lock read write between threads
-	std::map<PCHAR, Miner*>              miners_;         // Miner configurations
+	CRITICAL_SECTION					  mutex_;         // lock read write to any miner information
+	std::map<PTCHAR, Miner*>              miners_;        // Miner configurations
 
  };

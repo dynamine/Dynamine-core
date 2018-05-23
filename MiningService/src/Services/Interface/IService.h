@@ -15,17 +15,17 @@ class IService
 {
 public:
 	// Only one service object in the process
-	IService(PWCHAR name, PWCHAR display_name, DWORD accepted_controls);
+	IService(PTCHAR name, PTCHAR display_name, DWORD accepted_controls);
 
 	virtual ~IService();
 
 	// -------------------------------------------------------------------
 	// External methods
-	BOOL Install(CONST DWORD start_type, PWSTR dependencies, PWSTR account, PWSTR password);
+	BOOL Install(CONST DWORD start_type, PTSTR dependencies, PTSTR account, PTSTR password);
 
 	BOOL Uninstall();
 
-	DWORD Run(CONST DWORD start_type, PWSTR dependencies, PWSTR account, PWSTR password);
+	DWORD Run(CONST DWORD start_type, PTSTR dependencies, PTSTR account, PTSTR password);
 
 	VOID SetState(DWORD status);
 
@@ -89,8 +89,8 @@ protected:
 	// Singleton instance
 	static IService* instance_;
 
-    WCHAR                       service_name_[WCHAR_MAX];    // Service name
-	WCHAR                       display_name_[WCHAR_MAX];    // Service display name
+    TCHAR                       service_name_[CHAR_MAX];    // Service name
+	TCHAR                       display_name_[CHAR_MAX];    // Service display name
 	SERVICE_STATUS_HANDLE       status_handle_;              // Service status handle
 	HANDLE                      exit_event_;                 // Exit interrupt handle to signal the service to exit
 	SERVICE_STATUS              status_;                     // Service's status

@@ -5,7 +5,7 @@
 #include <iostream>
 
 MiningService::MiningService()
-	: IService(PWSTR(SERVICE_NAME), PWSTR(DISPLAY_NAME), SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN | SERVICE_ACCEPT_PAUSE_CONTINUE)
+	: IService(PTSTR(SERVICE_NAME), PTSTR(DISPLAY_NAME), SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN | SERVICE_ACCEPT_PAUSE_CONTINUE)
 {
 	// Initialize dependencies
 	miner_dispatch_thread_ = INVALID_HANDLE_VALUE;
@@ -75,6 +75,17 @@ VOID MiningService::OnStop()
 	LOG_F(INFO, "MiningService OnStop() Completed");
 }
 
+BOOL MiningService::StartMiner(Miner* miner)
+{
+	MinerThreadData* thread_data = new MinerThreadData;
+	thread_data->instance = this;
+	thread_data->miner = miner;
+
+	miner->thread = CreateThread(NULL, NULL, LPTHREAD_START_ROUTINE(MinerThreadProxy), thread_data, NULL, NULL);
+
+	return (miner->thread == INVALID_HANDLE_VALUE);
+}
+
 PCHAR* MiningService::GetDevices()
 {
 	// Run this command:
@@ -92,7 +103,7 @@ DWORD WINAPI MiningService::MinerThreadProxy(LPVOID thread_data)
 {
 	MinerThreadData* data = static_cast<MinerThreadData*>(thread_data);
 
-	data->instance->MinerThread(data->command);
+	data->instance->MinerThread(data->miner);
 	return 0;
 }
 
@@ -144,9 +155,37 @@ DWORD WINAPI MiningService::MinerDispatchThread(SOCKET client_socket)
 	return 0x0;
 }
 
-VOID MiningService::MinerThread(PCHAR command)
+VOID MiningService::MinerThread(Miner* miner)
 {
-	
+	STARTUPINFO si;
+
+	ZeroMemory(&si, sizeof(si));
+	si.cb = sizeof(si);
+	ZeroMemory(miner->process, sizeof(*(miner->process)));
+
+	// Start the child process. 
+	if (!CreateProcess(NULL,            // No module name (use command line)
+		miner->command,                 // Command line
+		NULL,                           // Process handle not inheritable
+		NULL,                           // Thread handle not inheritable
+		FALSE,                          // Set handle inheritance to FALSE
+		0,                              // No creation flags
+		NULL,                           // Use parent's environment block
+		NULL,                           // Use parent's starting directory 
+		&si,                            // Pointer to STARTUPINFO structure
+		miner->process)                 // Pointer to PROCESS_INFORMATION structure
+		)
+	{
+		LOG_F(ERROR, "CreateProcess failed (%d).\n", GetLastError());
+		return;
+	}
+
+	// Wait until child process exits.
+	WaitForSingleObject(miner->process->hProcess, INFINITE);
+
+	// Close process and thread handles. 
+	CloseHandle(miner->process->hProcess);
+	CloseHandle(miner->process->hThread);
 }
 
 VOID MiningService::CommandServerThread()
@@ -182,8 +221,8 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 	Packet* recvpack;
 	Packet* resources = new Packet(PCHAR("resources"), PCHAR("{ \"resources\": [\"localhost.gpu0.GTX1080\"] }"));
 	Packet* stats = new Packet(PCHAR("hashRate"), PCHAR("{}"));
-	Packet* start = new Packet(PCHAR("startMiner"), PCHAR("{ \"result\": \"success\"}"));
-	Packet* stop = new Packet(PCHAR("stopMiner"), PCHAR("{ \"result\": \"failure\"}"));
+	Packet* success = new Packet(PCHAR("startMiner"), PCHAR("{ \"result\": \"success\"}"));
+	Packet* failure = new Packet(PCHAR("stopMiner"), PCHAR("{ \"result\": \"failure\"}"));
 
 	// Once we establish a connection with this client
 	// it is expecting us to hold that connection open for more commands
@@ -217,13 +256,33 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 		if(strcmp(pack->command, CMD_START_MINER) == 0)
 		{
 
-			std::string resource = pack->data["resource"].dump();
+			std::string resource;
 			std::string miner = pack->data["miner"].dump();
 			std::map<std::string, std::string> miner_args = pack->data["miner_args"].get<std::map<std::string, std::string>>();
 
-			std::cout << miner_args << std::endl;
-			miner_com.SendData(pack);
-			miner_com.RecvData(recvpack);
+			std::string miner_start_command;
+			miner_start_command += "//Miners//ccminer//" + pack->data["miner_binary"].dump();
+
+			// Build the miner command
+			for(auto arg : miner_args)
+			{
+				// If the var is our resource then capture it
+				if (arg.first == "-d")
+					resource = arg.second;
+
+				miner_start_command += arg.first + " " + arg.second;
+			}
+
+			LOG_F(INFO, "Miner cmd: %s", miner_start_command);
+
+			Miner* miner_data = new Miner;
+			miner_data->command = strdup(miner_start_command.c_str());
+			miner_data->resource = strdup(resource.c_str());
+
+			StartMiner();
+
+			//miner_com.SendData(pack);
+			//miner_com.RecvData(recvpack);
 			client.SendData(start);
 			
 			LOG_F(INFO, "Started mining");

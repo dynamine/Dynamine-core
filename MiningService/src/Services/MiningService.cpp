@@ -86,6 +86,19 @@ BOOL MiningService::StartMiner(Miner* miner)
 	return (miner->thread == INVALID_HANDLE_VALUE);
 }
 
+BOOL MiningService::StopMiner(PTCHAR resource)
+{
+	if (miners_.count(resource) == 0)
+	{
+		LOG_F(INFO, "Failed to stop mining resource %s, nothing mining on it!");
+		return FALSE;
+	}
+
+	Miner* miner_data = miners_.at(resource);
+
+	return TerminateProcess(miner_data->process->hProcess, 0x0);
+}
+
 PCHAR* MiningService::GetDevices()
 {
 	// Run this command:
@@ -217,9 +230,9 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 	TcpClient miner_client(const_cast<PSTR>(COM_PORT));
 	TcpConnection miner_com(miner_client.GetSocket());
 
-	Packet* pack;
+	Packet *request, *response;
 	Packet* recvpack;
-	Packet* resources = new Packet(PCHAR("resources"), PCHAR("{ \"resources\": [\"localhost.gpu0.GTX1080\"] }"));
+	Packet* resources = new Packet(PCHAR("resources"), PCHAR("{ \"resources\": [\"gtx1080\"] }"));
 	Packet* stats = new Packet(PCHAR("hashRate"), PCHAR("{}"));
 	Packet* success = new Packet(PCHAR("startMiner"), PCHAR("{ \"result\": \"success\"}"));
 	Packet* failure = new Packet(PCHAR("stopMiner"), PCHAR("{ \"result\": \"failure\"}"));
@@ -229,20 +242,20 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 	while(client_socket != INVALID_SOCKET)
 	{
 		// TODO: fix json null data being sent at the end
-		pack = new Packet;
+		request = new Packet;
 		recvpack = new Packet;
 
 		LOG_F(INFO, "Waiting to receive packet...");
-		client.RecvData(pack);
-		LOG_F(INFO, "Got: %s", pack->command);
+		client.RecvData(request);
+		LOG_F(INFO, "Got: %s", request->command);
 
-		if (strcmp(pack->command, CMD_RESOURCES) == 0)
+		if (strcmp(request->command, CMD_RESOURCES) == 0)
 		{
 			client.SendData(resources);
 			LOG_F(INFO, "Sent resources");
 		}
 
-		if(strcmp(pack->command, CMD_STATS) == 0)
+		if(strcmp(request->command, CMD_STATS) == 0)
 		{
 			int rnum = rand() % 2000 + 1000;
 			stats->data = json({
@@ -253,15 +266,14 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 			LOG_F(INFO, "Sent hashRate");
 		}
 
-		if(strcmp(pack->command, CMD_START_MINER) == 0)
+		if(strcmp(request->command, CMD_START_MINER) == 0)
 		{
-
 			std::string resource;
-			std::string miner = pack->data["miner"].dump();
-			std::map<std::string, std::string> miner_args = pack->data["miner_args"].get<std::map<std::string, std::string>>();
+			std::string miner = request->data["miner"].dump();
+			std::map<std::string, std::string> miner_args = request->data["miner_args"].get<std::map<std::string, std::string>>();
 
 			std::string miner_start_command;
-			miner_start_command += "//Miners//ccminer//" + pack->data["miner_binary"].dump();
+			miner_start_command += "//Miners//ccminer//" + request->data["miner_binary"].dump();
 
 			// Build the miner command
 			for(auto arg : miner_args)
@@ -276,25 +288,46 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 			LOG_F(INFO, "Miner cmd: %s", miner_start_command);
 
 			Miner* miner_data = new Miner;
-			miner_data->command = strdup(miner_start_command.c_str());
-			miner_data->resource = strdup(resource.c_str());
+			miner_data->command = _strdup(miner_start_command.c_str());
+			miner_data->resource = _strdup(resource.c_str());
+			miner_data->running = FALSE;
 
-			StartMiner();
+			if(miners_.count(miner_data->resource))
+			{
+				StopMiner(miner_data->resource);
+				Miner* old_miner = miners_.at(miner_data->resource);
+				delete old_miner;
+			}
+
+			miners_.insert(std::make_pair(miner_data->resource, miner_data));
+
+			if (StartMiner(miner_data))
+				response = success;
+			else
+				response = failure;
 
 			//miner_com.SendData(pack);
 			//miner_com.RecvData(recvpack);
-			client.SendData(start);
+			client.SendData(response);
 			
 			LOG_F(INFO, "Started mining");
 		}
 
-		if(strcmp(pack->command, CMD_STOP_MINER) == 0)
+		if(strcmp(request->command, CMD_STOP_MINER) == 0)
 		{
-			client.SendData(stop);
+			std::string str_resource = request->data["resource"].dump();
+			PTSTR resource = _strdup(str_resource.c_str());
+
+			if (StopMiner(resource))
+				response = success;
+			else
+				response = failure;
+
+			client.SendData(response);
 			LOG_F(INFO, "Stopped mining");
 		}
 
-		delete pack;
+		delete request;
 		delete recvpack;
 		Sleep(500);
 	}
@@ -303,8 +336,8 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 
 	delete resources;
 	delete stats;
-	delete start;
-	delete stop;
+	delete success;
+	delete failure;
 
 	return 0x0;
 }

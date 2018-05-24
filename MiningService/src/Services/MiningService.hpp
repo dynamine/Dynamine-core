@@ -34,6 +34,9 @@ using namespace nlohmann;
 // Internal daemon com port
 #define COM_PORT "4002"
 
+// Base API starting port
+#define API_BASE_PORT 5000
+
 static const char* CMD_START_MINER =  "startMiner";
 static const char* CMD_STOP_MINER  =  "stopMiner";
 static const char* CMD_RESOURCES   =  "resources";
@@ -45,7 +48,7 @@ class MiningService : public IService
 	{
 		PTSTR                        command;  // command to run the miner
 		PTSTR                       resource;  // localhost.gpu0
-		PTSTR                          state;  // stopped, running
+		BOOL                         running;  // stopped, running
 		HANDLE                        thread;  // handle to process thread
 		PROCESS_INFORMATION*         process;  // Process info
 		PTSTR                    api_gateway;  // http://localhost:4004
@@ -54,7 +57,6 @@ class MiningService : public IService
 		{
 			free(command);
 			free(resource);
-			free(state);
 			free(api_gateway);
 		}
 	};
@@ -76,6 +78,7 @@ protected:
 	VOID OnStop() override;
 
 	BOOL StartMiner(Miner* miner);
+	BOOL StopMiner(PTCHAR resource);
 
 	PCHAR* GetDevices();
 

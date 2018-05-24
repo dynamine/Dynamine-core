@@ -117,8 +117,8 @@ packet_accept_result TcpConnection::RecvData(Packet *pack)
 	strcpy_s(pack->command, cmd.length() + 1, cmd.c_str());
 
 	// Copy body into packet
-	pack->data = json::parse(decoded_json["data"].dump());
-
+	//pack->data = json::parse(decoded_json["data"].dump());
+	pack->data = decoded_json["data"];
 	// Set status to ready
 	status = connection_open;
 

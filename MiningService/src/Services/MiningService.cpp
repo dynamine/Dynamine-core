@@ -72,6 +72,12 @@ VOID MiningService::OnStop()
 	LOG_F(INFO, "Terminating daemon thread...");
 	TerminateThread(miner_dispatch_thread_, 0x0);
 
+	LOG_F(INFO, "Terminating miners...");
+	for(auto miner : miners_)
+	{
+		StopMiner(miner.first);
+	}
+
 	LOG_F(INFO, "MiningService OnStop() Completed");
 }
 
@@ -82,15 +88,15 @@ BOOL MiningService::StartMiner(Miner* miner)
 	thread_data->miner = miner;
 
 	miner->thread = CreateThread(NULL, NULL, LPTHREAD_START_ROUTINE(MinerThreadProxy), thread_data, NULL, NULL);
-
-	return (miner->thread == INVALID_HANDLE_VALUE);
+	return (miner->thread != INVALID_HANDLE_VALUE);
 }
 
-BOOL MiningService::StopMiner(PTCHAR resource)
+BOOL MiningService::StopMiner(tstring resource)
 {
+
 	if (miners_.count(resource) == 0)
 	{
-		LOG_F(INFO, "Failed to stop mining resource %s, nothing mining on it!");
+		LOG_F(INFO, "Failed to stop mining resource %s, nothing mining on it!", resource.c_str());
 		return FALSE;
 	}
 
@@ -114,7 +120,7 @@ PCHAR* MiningService::GetDevices()
 
 DWORD WINAPI MiningService::MinerThreadProxy(LPVOID thread_data)
 {
-	MinerThreadData* data = static_cast<MinerThreadData*>(thread_data);
+	auto data = static_cast<MinerThreadData*>(thread_data);
 
 	data->instance->MinerThread(data->miner);
 	return 0;
@@ -196,6 +202,8 @@ VOID MiningService::MinerThread(Miner* miner)
 	// Wait until child process exits.
 	WaitForSingleObject(miner->process->hProcess, INFINITE);
 
+	LOG_F(INFO, "Stopping miner on resource %s", miner->resource.c_str());
+
 	// Close process and thread handles. 
 	CloseHandle(miner->process->hProcess);
 	CloseHandle(miner->process->hThread);
@@ -269,11 +277,11 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 		if(strcmp(request->command, CMD_START_MINER) == 0)
 		{
 			std::string resource;
-			std::string miner = request->data["miner"].dump();
+			std::string miner = request->data["miner_binary"].get<std::string>();
 			std::map<std::string, std::string> miner_args = request->data["miner_args"].get<std::map<std::string, std::string>>();
 
 			std::string miner_start_command;
-			miner_start_command += "//Miners//ccminer//" + request->data["miner_binary"].dump();
+			miner_start_command += "Miners//ccminer//" + miner;
 
 			// Build the miner command
 			for(auto arg : miner_args)
@@ -282,29 +290,35 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 				if (arg.first == "-d")
 					resource = arg.second;
 
-				miner_start_command += arg.first + " " + arg.second;
+				miner_start_command += " " + arg.first + " " + arg.second;
 			}
 
-			LOG_F(INFO, "Miner cmd: %s", miner_start_command);
+			std::string port = std::to_string(API_BASE_PORT + miners_.size());
+
+			// Add API gateway
+			miner_start_command += " -b " + std::string(API_BASE_HOST) + ":" + port;
+
+			LOG_F(INFO, "Miner cmd: %s", miner_start_command.c_str());
 
 			Miner* miner_data = new Miner;
 			miner_data->command = _strdup(miner_start_command.c_str());
 			miner_data->resource = _strdup(resource.c_str());
 			miner_data->running = FALSE;
+			miner_data->api_gateway_port = _strdup(port.c_str());
 
-			if(miners_.count(miner_data->resource))
+			if(miners_.count(miner_data->resource) != 0)
 			{
 				StopMiner(miner_data->resource);
 				Miner* old_miner = miners_.at(miner_data->resource);
 				delete old_miner;
+				miners_.erase(miners_.find(miner_data->resource));
 			}
 
-			miners_.insert(std::make_pair(miner_data->resource, miner_data));
+			miners_.insert(std::pair<tstring, Miner*>(miner_data->resource, miner_data));
 
-			if (StartMiner(miner_data))
-				response = success;
-			else
-				response = failure;
+			response = StartMiner(miner_data) ? success : failure;
+
+			response->command = PTCHAR(CMD_START_MINER);
 
 			//miner_com.SendData(pack);
 			//miner_com.RecvData(recvpack);
@@ -315,13 +329,12 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 
 		if(strcmp(request->command, CMD_STOP_MINER) == 0)
 		{
-			std::string str_resource = request->data["resource"].dump();
+			std::string str_resource = request->data["resource"].get<std::string>();
 			PTSTR resource = _strdup(str_resource.c_str());
 
-			if (StopMiner(resource))
-				response = success;
-			else
-				response = failure;
+			response = StopMiner(resource) ? success : failure;
+
+			response->command = PTCHAR(CMD_STOP_MINER);
 
 			client.SendData(response);
 			LOG_F(INFO, "Stopped mining");

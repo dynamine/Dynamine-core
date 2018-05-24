@@ -35,29 +35,40 @@ using namespace nlohmann;
 #define COM_PORT "4002"
 
 // Base API starting port
-#define API_BASE_PORT 5000
+#define API_BASE_PORT 4050
+#define API_BASE_HOST "127.0.0.1"
 
 static const char* CMD_START_MINER =  "startMiner";
 static const char* CMD_STOP_MINER  =  "stopMiner";
 static const char* CMD_RESOURCES   =  "resources";
 static const char* CMD_STATS       =  "hashRate";
 
+// TODO: Place this somewhere better
+typedef std::basic_string<TCHAR> tstring;
+
 class MiningService : public IService
  {
 	struct Miner
 	{
 		PTSTR                        command;  // command to run the miner
-		PTSTR                       resource;  // localhost.gpu0
+		tstring                     resource;  // localhost.gpu0
 		BOOL                         running;  // stopped, running
 		HANDLE                        thread;  // handle to process thread
 		PROCESS_INFORMATION*         process;  // Process info
-		PTSTR                    api_gateway;  // http://localhost:4004
+		PTSTR               api_gateway_port;  // 127.0.0.1:[4051]
+
+		Miner()
+		{
+			process = new PROCESS_INFORMATION;
+		}
 
 		~Miner()
 		{
 			free(command);
-			free(resource);
-			free(api_gateway);
+			free(api_gateway_port);
+
+			CloseHandle(thread);
+			delete process;
 		}
 	};
 
@@ -78,9 +89,12 @@ protected:
 	VOID OnStop() override;
 
 	BOOL StartMiner(Miner* miner);
-	BOOL StopMiner(PTCHAR resource);
+	BOOL StopMiner(tstring resource);
 
 	PCHAR* GetDevices();
+
+	// TODO: Implement this along with other setters/getters for thread locking
+	//Miner* GetMiner(tstring resource);
 
 	// Controls different instances of coin miner processes and
 	// relays commands to their APIs
@@ -108,6 +122,6 @@ private:
 	TcpServer<MiningService>*        cmd_server_;         // Command TCP Server to communicate with the daemon
 	TcpServer<MiningService>*  miner_cmd_server_;         // It sucks but this will let us scale for now
 	CRITICAL_SECTION					  mutex_;         // lock read write to any miner information
-	std::map<PTCHAR, Miner*>              miners_;        // Miner configurations
+	std::map<tstring, Miner*>            miners_;        // Miner configurations
 
  };

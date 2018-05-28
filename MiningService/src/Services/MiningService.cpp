@@ -3,6 +3,7 @@
 #include "../Network/TcpClient.hpp"
 
 #include <iostream>
+#include <list>
 
 MiningService::MiningService()
 	: IService(PTSTR(SERVICE_NAME), PTSTR(DISPLAY_NAME), SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN | SERVICE_ACCEPT_PAUSE_CONTINUE)
@@ -64,6 +65,12 @@ VOID MiningService::OnStop()
 	LOG_F(INFO, "Stopping com server...");
 	miner_cmd_server_->Stop();
 
+	LOG_F(INFO, "Terminating miners...");
+	for (auto miner : miners_)
+	{
+		StopMiner(miner.first);
+	}
+
 	// Terminate command thread
 	LOG_F(INFO, "Terminating command thread...");
 	TerminateThread(cmd_thread_, 0x0);
@@ -72,11 +79,7 @@ VOID MiningService::OnStop()
 	LOG_F(INFO, "Terminating daemon thread...");
 	TerminateThread(miner_dispatch_thread_, 0x0);
 
-	LOG_F(INFO, "Terminating miners...");
-	for(auto miner : miners_)
-	{
-		StopMiner(miner.first);
-	}
+	
 
 	LOG_F(INFO, "MiningService OnStop() Completed");
 }
@@ -87,8 +90,25 @@ BOOL MiningService::StartMiner(Miner* miner)
 	thread_data->instance = this;
 	thread_data->miner = miner;
 
+
 	miner->thread = CreateThread(NULL, NULL, LPTHREAD_START_ROUTINE(MinerThreadProxy), thread_data, NULL, NULL);
-	return (miner->thread != INVALID_HANDLE_VALUE);
+
+	if (miner->thread == INVALID_HANDLE_VALUE)
+		return FALSE;
+
+	DWORD exit_code;
+
+	// Wait for our error timeout
+	Sleep(40500);
+
+    // Failed to get Process state, try to kill and return failure
+	if (GetExitCodeProcess(miner->process->hProcess, &exit_code) == FALSE || (exit_code != STILL_ACTIVE && exit_code != 0))
+	{
+		StopMiner(miner->resource);
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 BOOL MiningService::StopMiner(tstring resource)
@@ -102,20 +122,143 @@ BOOL MiningService::StopMiner(tstring resource)
 
 	Miner* miner_data = miners_.at(resource);
 
-	return TerminateProcess(miner_data->process->hProcess, 0x0);
+	if (TerminateProcess(miner_data->process->hProcess, 0x0) == FALSE)
+	{
+		LOG_F(INFO, "Failed to terminate miner process for resource %s!", resource.c_str());
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
-PCHAR* MiningService::GetDevices()
+// For CCMiner, this will return the cuda devices and their id number
+std::vector<std::string> MiningService::GetDevices()
 {
-	// Run this command:
-	// wmic path win32_VideoController get name
-    /* Returns this:
-       Name
-       NVIDIA GeForce GTX 1080
-     */
-	// Parse out every line with "NVIDIA GeForce" and then combine the rest in lowercase
+	STARTUPINFO si;
+	SECURITY_ATTRIBUTES saAttr;
+	PROCESS_INFORMATION pi;
+	HANDLE child_stdout_read = NULL, child_stdout_write = NULL;
+	HANDLE child_stderr_read = NULL, child_stderr_write = NULL;
 
-	return nullptr;
+	std::vector<std::string> devices;
+
+	saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
+	saAttr.bInheritHandle = TRUE;
+	saAttr.lpSecurityDescriptor = NULL;
+
+	// Create a pipe for the child process's STDOUT. 
+	if (!CreatePipe(&child_stdout_read, &child_stdout_write, &saAttr, 0))
+	{
+		LOG_F(ERROR, "Failed to create stdout handle");
+		return devices;
+	}
+
+	if (!CreatePipe(&child_stderr_read, &child_stderr_write, &saAttr, 0))
+	{
+		LOG_F(ERROR, "Failed to create stdout handle");
+		return devices;
+	}
+
+
+	// Ensure the read handle to the pipe for STDOUT is not inherited.
+	if (!SetHandleInformation(child_stdout_read, HANDLE_FLAG_INHERIT, 0))
+	{
+		LOG_F(ERROR, "Failed to set read handle settings");
+		return devices;
+	}
+
+	// Ensure the read handle to the pipe for STDOUT is not inherited.
+	if (!SetHandleInformation(child_stderr_read, HANDLE_FLAG_INHERIT, 0))
+	{
+		LOG_F(ERROR, "Failed to set read handle settings");
+		return devices;
+	}
+
+	ZeroMemory(&si, sizeof(si));
+	si.cb = sizeof(si);
+	si.hStdError = child_stderr_write;
+	si.hStdOutput = child_stdout_write;
+	si.dwFlags |= STARTF_USESTDHANDLES;
+
+	ZeroMemory(&pi, sizeof(pi));
+
+	PTSTR cmd = PTSTR("Miners//ccminer//ccminer-x64.exe -n");
+
+	// Start the child process. 
+	if (!CreateProcess(NULL,            // No module name (use command line)
+		cmd,                            // Command line
+		NULL,                           // Process handle not inheritable
+		NULL,                           // Thread handle not inheritable
+		TRUE,                          // Set handle inheritance to FALSE
+		0,                              // No creation flags
+		NULL,                           // Use parent's environment block
+		NULL,                           // Use parent's starting directory 
+		&si,                            // Pointer to STARTUPINFO structure
+		&pi)                            // Pointer to PROCESS_INFORMATION structure
+		)
+	{
+		LOG_F(ERROR, "CreateProcess failed (%d).\n", GetLastError());
+		return devices;
+	}
+
+	CloseHandle(child_stdout_write);
+	CloseHandle(child_stderr_write);
+
+	// Read output of get devices
+	// TODO: This needs heavy refactoring to account for weird cases
+	// this is only covering the happy path right now
+	DWORD dwRead;
+	CHAR chBuf[4096];
+	memset(chBuf, 0, 4096);
+	BOOL bSuccess = FALSE;
+
+	std::string output = "", error = "";
+	for (;;) {
+		bSuccess = ReadFile(child_stdout_read, chBuf, 4096, &dwRead, NULL);
+		if (!bSuccess || dwRead == 0) break;
+
+		std::string s(chBuf, dwRead);
+		output += s;
+	}
+
+	dwRead = 0;
+	for (;;) {
+		bSuccess = ReadFile(child_stderr_read, chBuf, 4096, &dwRead, NULL);
+		if (!bSuccess || dwRead == 0) break;
+
+		std::string s(chBuf, dwRead);
+		error += s;
+	}
+
+	
+	std::istringstream devices_input(error);
+
+	for (std::string line; std::getline(devices_input, line); ) {
+		std::string device = "";
+		size_t found = line.find("GPU #");
+
+		if (found == std::string::npos)
+			continue;
+		// Only deal with up to 10 gpus for now
+		device += line[5] + std::string("@");
+
+		// Assume we always find this if we found GPU output
+		found = line.find('@');
+		// Gets the device name string
+		device += line.substr(8, found-8);
+
+		LOG_F(INFO, "Found device %s", device.c_str());
+
+		// Since this is a c string, the first char at the starting address will be converted to
+		// an int. This happens to be a number always in our device string
+		devices.push_back(device);
+	}
+
+	// Close process and thread handles. 
+	CloseHandle(pi.hProcess);
+	CloseHandle(pi.hThread);
+
+	return devices;
 }
 
 DWORD WINAPI MiningService::MinerThreadProxy(LPVOID thread_data)
@@ -240,10 +383,10 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 
 	Packet *request, *response;
 	Packet* recvpack;
-	Packet* resources = new Packet(PCHAR("resources"), PCHAR("{ \"resources\": [\"gtx1080\"] }"));
+
 	Packet* stats = new Packet(PCHAR("hashRate"), PCHAR("{}"));
-	Packet* success = new Packet(PCHAR("startMiner"), PCHAR("{ \"result\": \"success\"}"));
-	Packet* failure = new Packet(PCHAR("stopMiner"), PCHAR("{ \"result\": \"failure\"}"));
+	Packet* success = new Packet(PCHAR("startMiner"), PCHAR("{ \"result\": \"success\", \"resource\": \"none\"}"));
+	Packet* failure = new Packet(PCHAR("stopMiner"), PCHAR("{ \"result\": \"failure\", \"resource\": \"none\"}"));
 
 	// Once we establish a connection with this client
 	// it is expecting us to hold that connection open for more commands
@@ -259,22 +402,28 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 
 		if (strcmp(request->command, CMD_RESOURCES) == 0)
 		{
-			client.SendData(resources);
+			devices_ = GetDevices();
+
+			response = success;
+			response->command = PTCHAR(CMD_RESOURCES);
+			response->data = json({
+				{ "resources", devices_ }
+				});
+
+			client.SendData(response);
 			LOG_F(INFO, "Sent resources");
 		}
-
-		if(strcmp(request->command, CMD_STATS) == 0)
+		else if(strcmp(request->command, CMD_STATS) == 0)
 		{
-			int rnum = rand() % 2000 + 1000;
+			int rnum = rand() % 1300 + 1000;
 			stats->data = json({
-				{"resource", "localhost.gpu0.GTX1080"},
+				{"resource", "gtx1080"},
 				{"hashRate", std::to_string(rnum)}
 				});
 			client.SendData(stats);
 			LOG_F(INFO, "Sent hashRate");
 		}
-
-		if(strcmp(request->command, CMD_START_MINER) == 0)
+		else if(strcmp(request->command, CMD_START_MINER) == 0)
 		{
 			std::string resource;
 			std::string miner = request->data["miner_binary"].get<std::string>();
@@ -296,7 +445,7 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 			std::string port = std::to_string(API_BASE_PORT + miners_.size());
 
 			// Add API gateway
-			miner_start_command += " -b " + std::string(API_BASE_HOST) + ":" + port;
+			miner_start_command += " -b " + std::string(API_BASE_HOST) + ":" + port + " -r 3 --retry-pause=5 --timeout=10";
 
 			LOG_F(INFO, "Miner cmd: %s", miner_start_command.c_str());
 
@@ -316,9 +465,10 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 
 			miners_.insert(std::pair<tstring, Miner*>(miner_data->resource, miner_data));
 
-			response = StartMiner(miner_data) ? success : failure;
+			response = (StartMiner(miner_data) != 0) ? success : failure;
 
 			response->command = PTCHAR(CMD_START_MINER);
+			response->data["resource"] = resource;
 
 			//miner_com.SendData(pack);
 			//miner_com.RecvData(recvpack);
@@ -326,8 +476,7 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 			
 			LOG_F(INFO, "Started mining");
 		}
-
-		if(strcmp(request->command, CMD_STOP_MINER) == 0)
+		else if(strcmp(request->command, CMD_STOP_MINER) == 0)
 		{
 			std::string str_resource = request->data["resource"].get<std::string>();
 			PTSTR resource = _strdup(str_resource.c_str());
@@ -335,9 +484,14 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 			response = StopMiner(resource) ? success : failure;
 
 			response->command = PTCHAR(CMD_STOP_MINER);
+			response->data["resource"] = resource;
 
 			client.SendData(response);
 			LOG_F(INFO, "Stopped mining");
+		}
+		else
+		{
+			LOG_F(INFO, "UNKNOWN COMMAND RECEIVED %s, ", request->command);
 		}
 
 		delete request;
@@ -347,7 +501,6 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 	client.Close(true);
 	LOG_F(INFO, "CLIENT DISCONNECTED");
 
-	delete resources;
 	delete stats;
 	delete success;
 	delete failure;

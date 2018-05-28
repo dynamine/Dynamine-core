@@ -6,6 +6,7 @@
 #include <string>
 #include <random>
 #include <map>
+#include <list>
 
 // For json
 using namespace nlohmann;
@@ -91,10 +92,15 @@ protected:
 	BOOL StartMiner(Miner* miner);
 	BOOL StopMiner(tstring resource);
 
-	PCHAR* GetDevices();
+	std::vector<std::string> GetDevices();
 
 	// TODO: Implement this along with other setters/getters for thread locking
-	//Miner* GetMiner(tstring resource);
+	Miner* GetMiner(tstring resource);
+	BOOL AddMiner(Miner* miner);
+	BOOL RemoveMiner(tstring resource);
+
+	
+
 
 	// Controls different instances of coin miner processes and
 	// relays commands to their APIs
@@ -123,5 +129,6 @@ private:
 	TcpServer<MiningService>*  miner_cmd_server_;         // It sucks but this will let us scale for now
 	CRITICAL_SECTION					  mutex_;         // lock read write to any miner information
 	std::map<tstring, Miner*>            miners_;        // Miner configurations
+	std::vector<std::string>              devices_;
 
  };

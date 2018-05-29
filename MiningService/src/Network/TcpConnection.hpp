@@ -31,6 +31,17 @@ public:
 	size_t GetReadBytes();
 	size_t GetReadBufferSize();
 
+	/* Read data from a socket file descriptor into the data
+	* Params: data pointer of where to read in the data to
+	* returns: boolean of true if completed successfully or false
+	* if an error occurred*/
+	BOOL Read(PVOID data, size_t size);
+	/* Write data to a socket file descriptor from the data
+	* Params: data pointer of the data to write to the socket
+	* returns: boolean of true if completed successfully or false
+	* if an error occurred*/
+	BOOL Write(PVOID data, size_t size);
+
 	// TODO: This should be private, deal with it later
 	PWORD read_buffer;
 
@@ -63,14 +74,5 @@ private:
 
 	connection_status status;
 
-	/* Read data from a socket file descriptor into the data
-	* Params: data pointer of where to read in the data to
-	* returns: boolean of true if completed successfully or false
-	* if an error occurred*/
-	BOOL Read(PVOID data, size_t size);
-	/* Write data to a socket file descriptor from the data
-	* Params: data pointer of the data to write to the socket
-	* returns: boolean of true if completed successfully or false
-	* if an error occurred*/
-	BOOL Write(PVOID data, size_t size);
+	
 };

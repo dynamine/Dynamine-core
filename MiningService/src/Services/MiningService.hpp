@@ -99,8 +99,7 @@ protected:
 	BOOL AddMiner(Miner* miner);
 	BOOL RemoveMiner(tstring resource);
 
-	
-
+	int GetHashrate(tstring resource);
 
 	// Controls different instances of coin miner processes and
 	// relays commands to their APIs

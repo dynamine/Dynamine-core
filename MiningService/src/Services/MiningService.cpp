@@ -290,6 +290,25 @@ DWORD WINAPI MiningService::CommandThreadProxy(LPVOID thread_data)
 // -----------------------------------------------------------------------------
 // Real work done below
 
+int MiningService::GetHashrate(tstring resource)
+{
+	Miner* miner = miners_.at(resource);
+
+	TcpClient api_client(PTSTR("4050"));
+	TcpConnection api(api_client.GetSocket());
+
+	PTSTR cmd = PTSTR("summary");
+
+	api.Write(cmd, sizeof(cmd));
+
+	char data[PACKET_SIZE];
+	api.Read(data, PACKET_SIZE);
+
+	LOG_F(INFO, "%s", data);
+
+	return 0;
+}
+
 DWORD WINAPI MiningService::MinerDispatchThread(SOCKET client_socket)
 {
 	// Handles what to do when we receive a miner command
@@ -409,13 +428,18 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 			response->data = json({
 				{ "resources", devices_ }
 				});
-
+			
 			client.SendData(response);
+			delete response;
 			LOG_F(INFO, "Sent resources");
 		}
 		else if(strcmp(request->command, CMD_STATS) == 0)
 		{
-			int rnum = rand() % 1300 + 1000;
+			std::string resource_id = request->data["resource"].get<std::string>();
+
+			GetHashrate(resource_id);
+			int rnum = 1300;
+
 			stats->data = json({
 				{"resource", "gtx1080"},
 				{"hashRate", std::to_string(rnum)}
@@ -484,7 +508,7 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 			response = StopMiner(resource) ? success : failure;
 
 			response->command = PTCHAR(CMD_STOP_MINER);
-			response->data["resource"] = resource;
+			response->data["resource"] = resource; 
 
 			client.SendData(response);
 			LOG_F(INFO, "Stopped mining");

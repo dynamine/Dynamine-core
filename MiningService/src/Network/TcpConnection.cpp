@@ -129,9 +129,7 @@ BOOL TcpConnection::SendData(Packet *pack)
 {
 	status = connection_writing;
 
-	json json_response = json({
-	
-		});;
+	json json_response = json({});
 
 	json data = pack->data;
 

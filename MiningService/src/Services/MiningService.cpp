@@ -294,7 +294,7 @@ int MiningService::GetHashrate(tstring resource)
 {
 	Miner* miner = miners_.at(resource);
 
-	TcpClient api_client(PTSTR("4050"));
+	/*TcpClient api_client(PTSTR("4050"));
 	TcpConnection api(api_client.GetSocket());
 
 	PTSTR cmd = PTSTR("summary");
@@ -305,7 +305,7 @@ int MiningService::GetHashrate(tstring resource)
 	api.Read(data, PACKET_SIZE);
 
 	LOG_F(INFO, "%s", data);
-
+	*/
 	return 0;
 }
 
@@ -430,7 +430,6 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 				});
 			
 			client.SendData(response);
-			delete response;
 			LOG_F(INFO, "Sent resources");
 		}
 		else if(strcmp(request->command, CMD_STATS) == 0)
@@ -441,7 +440,7 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 			int rnum = 1300;
 
 			stats->data = json({
-				{"resource", "gtx1080"},
+				{"resource", "0@SM 6.1 Gigabyte GTX 1080"},
 				{"hashRate", std::to_string(rnum)}
 				});
 			client.SendData(stats);
@@ -492,7 +491,7 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 			response = (StartMiner(miner_data) != 0) ? success : failure;
 
 			response->command = PTCHAR(CMD_START_MINER);
-			response->data["resource"] = resource;
+			response->data["resource"] = devices_[atoi(resource.c_str())];
 
 			//miner_com.SendData(pack);
 			//miner_com.RecvData(recvpack);
@@ -508,7 +507,7 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 			response = StopMiner(resource) ? success : failure;
 
 			response->command = PTCHAR(CMD_STOP_MINER);
-			response->data["resource"] = resource; 
+			response->data["resource"] = devices_[atoi(resource)];
 
 			client.SendData(response);
 			LOG_F(INFO, "Stopped mining");
@@ -517,6 +516,13 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 		{
 			LOG_F(INFO, "UNKNOWN COMMAND RECEIVED %s, ", request->command);
 		}
+
+		// TODO: THIS IS AWFUL, fix with proper memory management in each command
+		delete success;
+		delete failure;
+
+		success = new Packet(PCHAR("startMiner"), PCHAR("{ \"result\": \"success\", \"resource\": \"none\"}"));
+		failure = new Packet(PCHAR("stopMiner"), PCHAR("{ \"result\": \"failure\", \"resource\": \"none\"}"));
 
 		delete request;
 		delete recvpack;

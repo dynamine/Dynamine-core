@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="include\easywsclient.cpp" />
     <ClCompile Include="msdn_ref.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\Network\TcpConnection.cpp" />
@@ -29,6 +30,8 @@
     <None Include=".gitignore" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\easywsclient.hpp" />
+    <ClInclude Include="include\json.hpp" />
     <ClInclude Include="include\loguru.hpp" />
     <ClInclude Include="src\Network\NetworkStructs.h" />
     <ClInclude Include="src\Network\TcpClient.hpp" />

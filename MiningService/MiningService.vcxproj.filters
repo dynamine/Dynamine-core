@@ -12,6 +12,9 @@
     <ClCompile Include="src\Network\TcpConnection.cpp">
       <Filter>src\Network</Filter>
     </ClCompile>
+    <ClCompile Include="include\easywsclient.cpp">
+      <Filter>include</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitignore" />
@@ -43,6 +46,12 @@
     </ClInclude>
     <ClInclude Include="src\Tools\Tools.h">
       <Filter>src\Tools</Filter>
+    </ClInclude>
+    <ClInclude Include="include\easywsclient.hpp">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\json.hpp">
+      <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -186,7 +186,8 @@ BOOL MiningService::StartMiner(Miner* miner)
 }
 
 BOOL MiningService::StopMiner(tstring resource)
-{	
+{
+	
 	if (miners_.count(resource) == 0)
 	{
 		LOG_F(INFO, "Failed to stop mining resource %s, nothing mining on it!", resource.c_str());
@@ -338,7 +339,7 @@ int MiningService::GetHashrate(tstring resource)
 {
 	Miner* miner = miners_.at(resource);
 
-	/*WSADATA wsa_data;
+	WSADATA wsa_data;
 
 	if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0)
 	{
@@ -348,11 +349,8 @@ int MiningService::GetHashrate(tstring resource)
 
 	EnterCriticalSection(&(miner->mutex));
 
-	//"ws://" + std::string(API_BASE_HOST) + ":" + std::string(miner->api_gateway_port)
-	std::unique_ptr<WebSocket> ws(WebSocket::from_url("ws://127.0.0.1:4050"));
-
-	if (!ws)
-		goto CLEANUP;
+	std::unique_ptr<WebSocket> ws(WebSocket::from_url("ws://" + std::string(API_BASE_HOST) + ":" + std::string(miner->api_gateway_port)));
+	_ASSERT(ws);
 
 	ws->send("threads");
 
@@ -372,18 +370,7 @@ int MiningService::GetHashrate(tstring resource)
 	}
 
 CLEANUP:
-	WSACleanup();*/
-
-	TcpClient api_client(PTSTR("4050"));
-	TcpConnection api(api_client.GetSocket());
-
-	PTSTR cmd = PTSTR("threads");
-	api.Write(cmd, sizeof(cmd));
-	char data[PACKET_SIZE];
-	api.Read(data, PACKET_SIZE);
-	LOG_F(INFO, "%s", data);
-
-
+	WSACleanup();
 	LeaveCriticalSection(&(miner->mutex));
 	
 	return 1300;

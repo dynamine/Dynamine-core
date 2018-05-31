@@ -4,9 +4,9 @@
 #include <loguru.hpp>
 #include <json.hpp>
 #include <string>
-#include <random>
 #include <map>
-#include <list>
+#include "../Network/TcpConnection.hpp"
+#include <iostream>
 
 // For json
 using namespace nlohmann;
@@ -57,14 +57,17 @@ class MiningService : public IService
 		HANDLE                        thread;  // handle to process thread
 		PROCESS_INFORMATION*         process;  // Process info
 		PTSTR               api_gateway_port;  // 127.0.0.1:[4051]
+		CRITICAL_SECTION		       mutex;  // Lock resources
 
 		Miner()
 		{
+			InitializeCriticalSection(&mutex);
 			process = new PROCESS_INFORMATION;
 		}
 
 		~Miner()
 		{
+			DeleteCriticalSection(&mutex);
 			free(command);
 			free(api_gateway_port);
 
@@ -127,7 +130,7 @@ private:
 	TcpServer<MiningService>*        cmd_server_;         // Command TCP Server to communicate with the daemon
 	TcpServer<MiningService>*  miner_cmd_server_;         // It sucks but this will let us scale for now
 	CRITICAL_SECTION					  mutex_;         // lock read write to any miner information
-	std::map<tstring, Miner*>            miners_;        // Miner configurations
-	std::vector<std::string>              devices_;
+	std::map<tstring, Miner*>            miners_;         // Miner configurations
+	std::vector<std::string>            devices_;
 
  };

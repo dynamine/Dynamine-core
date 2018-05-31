@@ -1,9 +1,9 @@
 #include "MiningService.hpp"
-#include "../Network/TcpConnection.hpp"
+#include "../Tools/Tools.h"
 #include "../Network/TcpClient.hpp"
+#include "easywsclient.hpp"
 
-#include <iostream>
-#include <list>
+using easywsclient::WebSocket;
 
 MiningService::MiningService()
 	: IService(PTSTR(SERVICE_NAME), PTSTR(DISPLAY_NAME), SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN | SERVICE_ACCEPT_PAUSE_CONTINUE)
@@ -16,7 +16,8 @@ MiningService::MiningService()
 	// Create a TCPServer to handle commands to the miner
 	cmd_server_ = new TcpServer<MiningService>(PORT);
 
-	miner_cmd_server_ = new TcpServer<MiningService>(COM_PORT);
+	// TODO: Cutting feature for now but could use this for relaying api calls nicely
+	//miner_cmd_server_ = new TcpServer<MiningService>(COM_PORT);
 
 	// Acknowledge that we made it to the logs
 	LOG_F(INFO, "MiningService Constructed");
@@ -25,7 +26,7 @@ MiningService::MiningService()
 MiningService::~MiningService()
 {
 	delete cmd_server_;
-	delete miner_cmd_server_;
+	//delete miner_cmd_server_;
 
 	// If the daemon thread hasnt been cleaned up do it now
 	if (miner_dispatch_thread_ != INVALID_HANDLE_VALUE)
@@ -41,15 +42,15 @@ VOID MiningService::OnStart(DWORD argc, LPTSTR* argv)
 	SetState(SERVICE_RUNNING);
 
 	// Create Miner dispatch thread
-	LOG_F(INFO, "Creating daemon thread...");
-	miner_dispatch_thread_ = CreateThread(NULL, NULL, LPTHREAD_START_ROUTINE(MinerDispatchProxy), this, NULL, NULL);
+	//LOG_F(INFO, "Creating daemon thread...");
+	//miner_dispatch_thread_ = CreateThread(NULL, NULL, LPTHREAD_START_ROUTINE(MinerDispatchProxy), this, NULL, NULL);
 
 	LOG_F(INFO, "Creating command thread...");
 	cmd_thread_ = CreateThread(NULL, NULL, LPTHREAD_START_ROUTINE(CommandThreadProxy), this, NULL, NULL);
 
 	LOG_F(INFO, "Started mining service!");
 	// Wait here for daemon thread to complete
-	WaitForSingleObject(miner_dispatch_thread_, INFINITE);
+	WaitForSingleObject(cmd_thread_, INFINITE);
 
 	SetStatusStopped(0x0);
 
@@ -62,13 +63,14 @@ VOID MiningService::OnStop()
 	LOG_F(INFO, "Stopping command server...");
 	cmd_server_->Stop();
 
-	LOG_F(INFO, "Stopping com server...");
-	miner_cmd_server_->Stop();
+	//LOG_F(INFO, "Stopping com server...");
+	//miner_cmd_server_->Stop();
 
 	LOG_F(INFO, "Terminating miners...");
 	for (auto miner : miners_)
 	{
 		StopMiner(miner.first);
+		Delete(miner.second);
 	}
 
 	// Terminate command thread
@@ -76,13 +78,82 @@ VOID MiningService::OnStop()
 	TerminateThread(cmd_thread_, 0x0);
 
 	// Terminate daemon thread
-	LOG_F(INFO, "Terminating daemon thread...");
-	TerminateThread(miner_dispatch_thread_, 0x0);
-
-	
+	//LOG_F(INFO, "Terminating daemon thread...");
+	//TerminateThread(miner_dispatch_thread_, 0x0);
 
 	LOG_F(INFO, "MiningService OnStop() Completed");
 }
+
+
+// Proxies to start class methods as threads
+
+DWORD WINAPI MiningService::MinerThreadProxy(LPVOID thread_data)
+{
+	auto data = static_cast<MinerThreadData*>(thread_data);
+
+	data->instance->MinerThread(data->miner);
+	return 0;
+}
+
+DWORD WINAPI MiningService::MinerDispatchProxy(LPVOID thread_data)
+{
+	auto parent = static_cast<MiningService*>(thread_data);
+
+	parent->MinerComThread();
+
+	return 0;
+}
+
+DWORD WINAPI MiningService::CommandThreadProxy(LPVOID thread_data)
+{
+	auto parent = static_cast<MiningService*>(thread_data);
+
+	parent->CommandServerThread();
+
+	return 0;
+}
+
+// -----------------------------------------------------------------------------
+// Real work done below
+
+// TODO: Not used currently
+VOID MiningService::MinerComThread()
+{
+	LOG_F(INFO, "Starting communication TCP command server on port %s\n", COM_PORT);
+
+	// Start TCP server and when a client connects, dispatch info to the
+	// MiningService::MinerDispatchThread function that will be ran on
+	// a thread so that we can take N amount of clients
+	miner_cmd_server_->Start(this, &MiningService::MinerDispatchThread);
+}
+
+DWORD WINAPI MiningService::MinerDispatchThread(SOCKET client_socket)
+{
+	// Handles what to do when we receive a miner command
+	LOG_F(INFO, "Received miner command");
+	TcpConnection client(client_socket);
+	Packet* pack;
+	Packet* start = new Packet(PCHAR("startMiner"), PCHAR("{ \"result\": \"success\"}"));
+
+	while (client_socket != INVALID_SOCKET)
+	{
+		pack = new Packet;
+		LOG_F(INFO, "Waiting to receive communication...");
+		client.RecvData(pack);
+		LOG_F(INFO, "Comm Got: %s", pack->command);
+		client.SendData(start);
+		LOG_F(INFO, "Sent success");
+		delete pack;
+	}
+
+	delete start;
+
+	client.Close(true);
+	LOG_F(INFO, "Closing com connection");
+
+	return 0x0;
+}
+// ----------------------------------------
 
 BOOL MiningService::StartMiner(Miner* miner)
 {
@@ -101,7 +172,7 @@ BOOL MiningService::StartMiner(Miner* miner)
 	// Wait for our error timeout
 	Sleep(40500);
 
-    // Failed to get Process state, try to kill and return failure
+	// Failed to get Process state, try to kill and return failure
 	if (GetExitCodeProcess(miner->process->hProcess, &exit_code) == FALSE || (exit_code != STILL_ACTIVE && exit_code != 0))
 	{
 		StopMiner(miner->resource);
@@ -230,7 +301,7 @@ std::vector<std::string> MiningService::GetDevices()
 		error += s;
 	}
 
-	
+
 	std::istringstream devices_input(error);
 
 	for (std::string line; std::getline(devices_input, line); ) {
@@ -245,7 +316,7 @@ std::vector<std::string> MiningService::GetDevices()
 		// Assume we always find this if we found GPU output
 		found = line.find('@');
 		// Gets the device name string
-		device += line.substr(8, found-8);
+		device += line.substr(8, found - 8);
 
 		LOG_F(INFO, "Found device %s", device.c_str());
 
@@ -261,38 +332,13 @@ std::vector<std::string> MiningService::GetDevices()
 	return devices;
 }
 
-DWORD WINAPI MiningService::MinerThreadProxy(LPVOID thread_data)
-{
-	auto data = static_cast<MinerThreadData*>(thread_data);
-
-	data->instance->MinerThread(data->miner);
-	return 0;
-}
-
-DWORD WINAPI MiningService::MinerDispatchProxy(LPVOID thread_data)
-{
-	auto parent = static_cast<MiningService*>(thread_data);
-
-	parent->MinerComThread();
-
-	return 0;
-}
-
-DWORD WINAPI MiningService::CommandThreadProxy(LPVOID thread_data)
-{
-	auto parent = static_cast<MiningService*>(thread_data);
-
-	parent->CommandServerThread();
-
-	return 0;
-}
-
-// -----------------------------------------------------------------------------
-// Real work done below
-
 int MiningService::GetHashrate(tstring resource)
 {
 	Miner* miner = miners_.at(resource);
+
+	EnterCriticalSection(&(miner->mutex));
+
+	//WebSocket::pointer ws = WebSocket::from_url(strcat())
 
 	/*TcpClient api_client(PTSTR("4050"));
 	TcpConnection api(api_client.GetSocket());
@@ -306,34 +352,10 @@ int MiningService::GetHashrate(tstring resource)
 
 	LOG_F(INFO, "%s", data);
 	*/
+
+	LeaveCriticalSection(&(miner->mutex));
+	
 	return 0;
-}
-
-DWORD WINAPI MiningService::MinerDispatchThread(SOCKET client_socket)
-{
-	// Handles what to do when we receive a miner command
-	LOG_F(INFO, "Received miner command");
-	TcpConnection client(client_socket);
-	Packet* pack;
-	Packet* start = new Packet(PCHAR("startMiner"), PCHAR("{ \"result\": \"success\"}"));
-
-	while(client_socket != INVALID_SOCKET)
-	{
-		pack = new Packet;
-		LOG_F(INFO, "Waiting to receive communication...");
-		client.RecvData(pack);
-		LOG_F(INFO, "Comm Got: %s", pack->command);
-		client.SendData(start);
-		LOG_F(INFO, "Sent success");
-		delete pack;
-	}
-
-	delete start;
-
-	client.Close(true);
-	LOG_F(INFO, "Closing com connection");
-
-	return 0x0;
 }
 
 VOID MiningService::MinerThread(Miner* miner)
@@ -381,15 +403,6 @@ VOID MiningService::CommandServerThread()
 	cmd_server_->Start(this, &MiningService::OnClientConnect);
 }
 
-VOID MiningService::MinerComThread()
-{
-	LOG_F(INFO, "Starting communication TCP command server on port %s\n", COM_PORT);
-
-	// Start TCP server and when a client connects, dispatch info to the
-	// MiningService::MinerDispatchThread function that will be ran on
-	// a thread so that we can take N amount of clients
-	miner_cmd_server_->Start(this, &MiningService::MinerDispatchThread);
-}
 
 // When a client connects to the Command TCP server this is the filtering it goes through
 DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
@@ -400,8 +413,9 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 	TcpClient miner_client(const_cast<PSTR>(COM_PORT));
 	TcpConnection miner_com(miner_client.GetSocket());
 
-	Packet *request, *response;
-	Packet* recvpack;
+	Packet *request = NULL, 
+           *response = NULL,
+	       *recvpack = NULL;
 
 	Packet* stats = new Packet(PCHAR("hashRate"), PCHAR("{}"));
 	Packet* success = new Packet(PCHAR("startMiner"), PCHAR("{ \"result\": \"success\", \"resource\": \"none\"}"));
@@ -482,7 +496,7 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 			{
 				StopMiner(miner_data->resource);
 				Miner* old_miner = miners_.at(miner_data->resource);
-				delete old_miner;
+				Delete(old_miner);
 				miners_.erase(miners_.find(miner_data->resource));
 			}
 
@@ -518,22 +532,24 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 		}
 
 		// TODO: THIS IS AWFUL, fix with proper memory management in each command
-		delete success;
-		delete failure;
+		Delete(success);
+		Delete(failure);
 
 		success = new Packet(PCHAR("startMiner"), PCHAR("{ \"result\": \"success\", \"resource\": \"none\"}"));
 		failure = new Packet(PCHAR("stopMiner"), PCHAR("{ \"result\": \"failure\", \"resource\": \"none\"}"));
 
-		delete request;
-		delete recvpack;
+		Delete(request);
+		Delete(recvpack);
 		Sleep(500);
 	}
 	client.Close(true);
 	LOG_F(INFO, "CLIENT DISCONNECTED");
 
-	delete stats;
-	delete success;
-	delete failure;
+	Delete(stats);
+	Delete(success);
+	Delete(failure);
+	Delete(request);
+	Delete(recvpack);
 
 	return 0x0;
 }

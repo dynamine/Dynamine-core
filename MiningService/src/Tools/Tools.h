@@ -3,10 +3,11 @@
 #include <windows.h>
 #include <crtdbg.h>
 
-VOID Delete(PVOID mem)
+VOID PDelete(Packet* mem)
 {
 	if (mem == NULL)
 		return;
+
 	delete mem;
 	mem = NULL;
 }

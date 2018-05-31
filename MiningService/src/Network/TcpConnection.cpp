@@ -111,8 +111,13 @@ VOID TcpConnection::Close(BOOL force)
 	}
 
 	if (socket_fd_ != INVALID_SOCKET)
-		closesocket(socket_fd_);
-	
+	{
+		if (closesocket(socket_fd_) != 0)
+		{
+			LOG_F(ERROR, "Failed to close socket, %08X", WSAGetLastError());
+		}
+		socket_fd_ = INVALID_SOCKET;
+	}
 	status = connection_closed;
 	LeaveCriticalSection(&write_mutex_);
 }
@@ -133,7 +138,7 @@ packet_accept_result TcpConnection::RecvData(Packet *pack)
 		return packet_accept_error;
 	}
 
-	if (encoded_json != NULL)
+	if (encoded_json[0] != 0)
 	{
 		// Get decoded json from bytes
 		json decoded_json = json::parse(encoded_json);

@@ -20,7 +20,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="include\easywsclient.cpp" />
-    <ClCompile Include="msdn_ref.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\Network\TcpConnection.cpp" />
     <ClCompile Include="src\Services\Interface\IService.cpp" />

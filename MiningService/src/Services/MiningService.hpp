@@ -91,6 +91,10 @@ public:
 protected:
 	VOID OnStart(DWORD argc, LPTSTR* argv) override;
 	VOID OnStop() override;
+	VOID OnShutdown() override
+	{
+		OnStop();
+	}
 
 	BOOL StartMiner(Miner* miner);
 	BOOL StopMiner(tstring resource);

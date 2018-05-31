@@ -271,7 +271,7 @@ DWORD IService::Run(CONST DWORD start_type, PTSTR dependencies, PTSTR account, P
 	// Get command line arguments and set configs with them
 	int num_args = 0;
 	// Get unicode command line arguments just in case
-	LPTSTR* tchar_cmd_args = ::CommandLineToArgvA(::GetCommandLineA(), &num_args);
+	LPTSTR* tchar_cmd_args = CommandLineToArgvA(::GetCommandLineA(), &num_args);
 	// Loop over arguments
 	for (int i = 0; i < num_args; i++)
 	{
@@ -401,7 +401,7 @@ VOID IService::service_main(DWORD argc, LPTSTR* argv)
 	instance_->_service_main(argc, argv);
 }
 
-BOOL IService::console_control_handler(DWORD ctrl_type)
+BOOL WINAPI IService::console_control_handler(DWORD ctrl_type)
 {
 	return instance_->_console_control_handler(ctrl_type);
 }
@@ -419,12 +419,15 @@ DWORD IService::service_control_handler(DWORD service_control, DWORD event_type,
 
 VOID IService::_service_main(DWORD argc, LPTSTR* argv)
 {
-	_ASSERTE(instance_ != NULL);
 
 	if (IsDebug())
 	{
 		// Register the console control handler
-		::SetConsoleCtrlHandler(PHANDLER_ROUTINE(console_control_handler), TRUE);
+		if(::SetConsoleCtrlHandler(PHANDLER_ROUTINE(console_control_handler), TRUE) == 0)
+		{
+			LOG_F(ERROR, "Failed to register ConsoleCtrlHandler!");
+			return;
+		}
 		LOG_F(INFO, "Press Ctrl+C or Ctrl+Break to quit...");
 	}
 	else
@@ -446,7 +449,11 @@ VOID IService::_service_main(DWORD argc, LPTSTR* argv)
 BOOL IService::_console_control_handler(DWORD ctrl_type)
 {
 	// If not any exit event then ignore
-	if (!(ctrl_type == CTRL_C_EVENT || ctrl_type == CTRL_BREAK_EVENT || ctrl_type == CTRL_SHUTDOWN_EVENT))
+	if (!(
+		ctrl_type == CTRL_C_EVENT || 
+		ctrl_type == CTRL_BREAK_EVENT || 
+		ctrl_type == CTRL_SHUTDOWN_EVENT ||
+		ctrl_type == CTRL_CLOSE_EVENT))
 		return FALSE;
 
 	OnStop();

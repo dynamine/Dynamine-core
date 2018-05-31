@@ -70,8 +70,7 @@ VOID MiningService::OnStop()
 	LOG_F(INFO, "Terminating miners...");
 	for (auto miner : miners_)
 	{
-		if(miner.second->process != INVALID_HANDLE_VALUE)
-			StopMiner(miner.first);
+		StopMiner(miner.first);
 
 		Delete(miner.second);
 	}
@@ -194,6 +193,9 @@ BOOL MiningService::StopMiner(tstring resource)
 	}
 
 	Miner* miner_data = miners_.at(resource);
+
+	if (miner_data->process == NULL)
+		return TRUE;
 
 	if (TerminateProcess(miner_data->process->hProcess, 0x0) == FALSE)
 	{
@@ -336,57 +338,53 @@ std::vector<std::string> MiningService::GetDevices()
 
 int MiningService::GetHashrate(tstring resource)
 {
+	std::size_t gpu_khs_idx, gpu_khs_end_idx;
+	std::string khs_str;
+	double khs = 0;
+	int hash_rate = 1300;
+
 	Miner* miner = miners_.at(resource);
-
-	/*WSADATA wsa_data;
-
-	if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0)
-	{
-		LOG_F(ERROR, "WSAStartup Failure: %08X", WSAGetLastError());
-		return -1;
-	}
 
 	EnterCriticalSection(&(miner->mutex));
 
-	//"ws://" + std::string(API_BASE_HOST) + ":" + std::string(miner->api_gateway_port)
-	std::unique_ptr<WebSocket> ws(WebSocket::from_url("ws://127.0.0.1:4050"));
-
-	if (!ws)
-		goto CLEANUP;
-
-	ws->send("threads");
-
-	// We just want to do this once for now
-
-	while(ws->getReadyState() != WebSocket::CLOSED)
-	{
-		ws->poll();
-		WebSocket::pointer wsp = &*ws;
-
-		ws->dispatch([wsp](const std::string &message)
-		{
-			LOG_F(INFO, "Received websocket message: %s", message.c_str());
-			wsp->close();
-
-		});
-	}
-
-CLEANUP:
-	WSACleanup();*/
-
-	TcpClient api_client(PTSTR("4050"));
+	// Create connection to local API
+	TcpClient api_client(miner->api_gateway_port);
 	TcpConnection api(api_client.GetSocket());
 
+	// Send command to get thread data
 	PTSTR cmd = PTSTR("threads");
 	api.Write(cmd, sizeof(cmd));
+	
+	// Read back data by bytes
 	char data[PACKET_SIZE];
-	api.Read(data, PACKET_SIZE);
-	LOG_F(INFO, "%s", data);
+	size_t bytes = api.ReadLine(data);
 
+	// Parse
+	std::string api_result = std::string(data);
 
+	std::size_t gpu_idx = api_result.find("GPU=" + resource);
+
+	if(bytes < 1 || gpu_idx == std::string::npos)
+	{
+		LOG_F(ERROR, "Failed to get api hashrate back!");
+		hash_rate = 0;
+		goto CLEANUP;
+	}
+
+	gpu_khs_idx = api_result.find("KHS=", gpu_idx) + 4;
+	gpu_khs_end_idx = api_result.find(';', gpu_khs_idx);
+
+	khs_str = api_result.substr(gpu_khs_idx, gpu_khs_end_idx - gpu_khs_idx);
+
+	khs = atof(khs_str.c_str());
+
+	hash_rate = khs / 1000;
+	LOG_F(INFO, "Hash rate: %d", hash_rate);
+
+CLEANUP:
 	LeaveCriticalSection(&(miner->mutex));
 	
-	return 1300;
+	return hash_rate;
 }
 
 VOID MiningService::MinerThread(Miner* miner)
@@ -459,6 +457,12 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 
 		LOG_F(INFO, "Waiting to receive packet...");
 		client.RecvData(request);
+		if (request->command[0] == 0)
+		{
+			LOG_F(WARNING, "Got empty packet, failed to parse json!");
+			goto END;
+		}
+
 		LOG_F(INFO, "Got: %s", request->command);
 
 		if (strcmp(request->command, CMD_RESOURCES) == 0)
@@ -509,7 +513,7 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 			std::string port = std::to_string(API_BASE_PORT + miners_.size());
 
 			// Add API gateway
-			miner_start_command += " -b " + std::string(API_BASE_HOST) + ":" + port + " -r 3 --retry-pause=5 --timeout=10";
+			miner_start_command += " -b " + std::string(API_BASE_HOST) + ":" + port + " --api-allow=127.0.0.1 -r 3 --retry-pause=5 --timeout=10";
 
 			LOG_F(INFO, "Miner cmd: %s", miner_start_command.c_str());
 
@@ -555,6 +559,8 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 		{
 			LOG_F(INFO, "UNKNOWN COMMAND RECEIVED %s, ", request->command);
 		}
+
+END:
 
 		// TODO: THIS IS AWFUL, fix with proper memory management in each command
 		Delete(success);

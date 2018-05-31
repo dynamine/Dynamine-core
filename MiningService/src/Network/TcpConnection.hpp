@@ -36,6 +36,10 @@ public:
 	* returns: boolean of true if completed successfully or false
 	* if an error occurred*/
 	BOOL Read(PVOID data, size_t size);
+
+	// Reads byte by byte in until we get a NULL char
+	size_t ReadLine(PVOID data);
+
 	/* Write data to a socket file descriptor from the data
 	* Params: data pointer of the data to write to the socket
 	* returns: boolean of true if completed successfully or false

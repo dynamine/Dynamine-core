@@ -75,6 +75,30 @@ BOOL TcpConnection::Read(PVOID data, size_t size)
 	return TRUE;
 }
 
+size_t TcpConnection::ReadLine(PVOID data)
+{
+	size_t read = 0;
+	size_t sizeToRead = 0;
+	size_t bytesRead = -1;
+	char current_char = ' '; // TODO: Not the best but works for now
+
+	while (bytesRead != 0 && current_char != '\0')
+	{
+		bytesRead = recv(socket_fd_, (read + (char*)data), 1, 0);
+		// if this is less than 0 it is a error
+		if (bytesRead < 0)
+			return -1;
+
+		// Set current character
+		current_char = *(read + (char*)data);
+
+		// Increment the data
+		read += bytesRead;
+
+	}
+	return read;
+}
+
 VOID TcpConnection::Close(BOOL force)
 {
 	EnterCriticalSection(&write_mutex_);
@@ -100,6 +124,8 @@ packet_accept_result TcpConnection::RecvData(Packet *pack)
 	// Receive encoded json as raw bytes
 	PBYTE encoded_json = new BYTE[PACKET_SIZE];
 
+	memset(encoded_json, 0, PACKET_SIZE);
+
 	// Attempt to read in encoded json
 	if(!Read(encoded_json, PACKET_SIZE))
 	{
@@ -107,18 +133,21 @@ packet_accept_result TcpConnection::RecvData(Packet *pack)
 		return packet_accept_error;
 	}
 
-	// Get decoded json from bytes
-	json decoded_json = json::parse(encoded_json);
+	if (encoded_json != NULL)
+	{
+		// Get decoded json from bytes
+		json decoded_json = json::parse(encoded_json);
 
-	// Get command
-	std::string cmd = decoded_json["cmd"].get<std::string>();
+		// Get command
+		std::string cmd = decoded_json["cmd"].get<std::string>();
 
-	// Copy command into packet
-	strcpy_s(pack->command, cmd.length() + 1, cmd.c_str());
+		// Copy command into packet
+		strcpy_s(pack->command, cmd.length() + 1, cmd.c_str());
 
-	// Copy body into packet
-	//pack->data = json::parse(decoded_json["data"].dump());
-	pack->data = decoded_json["data"];
+		// Copy body into packet
+		pack->data = decoded_json["data"];
+	}
+
 	// Set status to ready
 	status = connection_open;
 

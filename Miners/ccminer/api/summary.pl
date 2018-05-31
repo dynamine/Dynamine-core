@@ -9,7 +9,7 @@ use IO::Socket::INET;
 
 my $sock = new IO::Socket::INET (
     PeerAddr => '127.0.0.1',
-    PeerPort => 4068,
+    PeerPort => 4050,
     Proto => 'tcp',
     ReuseAddr => 1,
     Timeout => 10,

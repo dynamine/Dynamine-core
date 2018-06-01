@@ -71,13 +71,14 @@ VOID MiningService::OnStop()
 	for (auto miner : miners_)
 	{
 		StopMiner(miner.first);
-
+		miners_.erase(miners_.find(miner.first));
 		delete miner.second;
 	}
 
 	// Terminate command thread
 	LOG_F(INFO, "Terminating command thread...");
-	TerminateThread(cmd_thread_, 0x0);
+	if(cmd_thread_ != INVALID_HANDLE_VALUE)
+		TerminateThread(cmd_thread_, 0x0);
 
 	// Terminate daemon thread
 	//LOG_F(INFO, "Terminating daemon thread...");
@@ -194,7 +195,10 @@ BOOL MiningService::StopMiner(tstring resource)
 
 	Miner* miner_data = miners_.at(resource);
 
-	if (miner_data->process == reinterpret_cast<PROCESS_INFORMATION*>(0xFFFFFFFFFFFFFFFF))
+	if (miner_data->process == NULL)
+		return TRUE;
+
+	if (miner_data->thread == INVALID_HANDLE_VALUE)
 		return TRUE;
 
 	if (TerminateProcess(miner_data->process->hProcess, 0x0) == FALSE)
@@ -336,12 +340,25 @@ std::vector<std::string> MiningService::GetDevices()
 	return devices;
 }
 
+MiningService::Miner* MiningService::GetMiner(tstring resource)
+{
+	Miner* miner = NULL;
+	try
+	{
+		miner = miners_.at(resource);
+	}
+	catch (const std::out_of_range& e) {}
+
+	return miner;
+		
+}
+
 int MiningService::GetHashrate(tstring resource)
 {
 	std::size_t gpu_khs_idx, gpu_khs_end_idx;
 	std::string khs_str;
 	double khs = 0;
-	int hash_rate = 1300;
+	int hash_rate = -1;
 
 	Miner* miner = miners_.at(resource);
 
@@ -443,7 +460,8 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
            *response = NULL,
 	       *recvpack = NULL;
 
-	Packet* stats = new Packet(PCHAR("hashRate"), PCHAR("{}"));
+	BOOL terminate = FALSE;
+
 	Packet* success = new Packet(PCHAR("startMiner"), PCHAR("{ \"result\": \"success\", \"resource\": \"none\"}"));
 	Packet* failure = new Packet(PCHAR("stopMiner"), PCHAR("{ \"result\": \"failure\", \"resource\": \"none\"}"));
 
@@ -481,14 +499,23 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 		else if(strcmp(request->command, CMD_STATS) == 0)
 		{
 			std::string resource_id = request->data["resource"].get<std::string>();
+			int hash_rate = -1;
 
-			int hash_rate = GetHashrate(resource_id);
+			if (GetMiner(resource_id))
+			{
+				hash_rate = GetHashrate(resource_id);
+				response = (hash_rate > -1) ? success : failure;
+				response->data = json({
+					{ "resource", devices_[atoi(resource_id.c_str())] },
+					{ "hashRate", std::to_string(hash_rate) }
+					});
+			}
+			else
+				response = failure;
 
-			stats->data = json({
-				{"resource", devices_[atoi(resource_id.c_str())]},
-				{"hashRate", std::to_string(hash_rate)}
-				});
-			client.SendData(stats);
+			response->command = PTCHAR(CMD_STATS);
+			
+			client.SendData(response);
 			LOG_F(INFO, "Sent hashRate");
 		}
 		else if(strcmp(request->command, CMD_START_MINER) == 0)
@@ -512,6 +539,7 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 
 			std::string port = std::to_string(API_BASE_PORT + miners_.size());
 
+			std::string miner_start_command_old = miner_start_command;
 			// Add API gateway
 			miner_start_command += " -b " + std::string(API_BASE_HOST) + ":" + port + " --api-allow=127.0.0.1 -r 3 --retry-pause=5 --timeout=10";
 
@@ -523,17 +551,30 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 			miner_data->running = FALSE;
 			miner_data->api_gateway_port = _strdup(port.c_str());
 
+			// If we have something running, lets figure out how to handle it
 			if(miners_.count(miner_data->resource) != 0)
 			{
-				StopMiner(miner_data->resource);
 				Miner* old_miner = miners_.at(miner_data->resource);
-				delete old_miner;
-				miners_.erase(miners_.find(miner_data->resource));
+				// If the miner is not the same stop whatever is running there
+				miner_start_command_old += " -b " + std::string(API_BASE_HOST) + ":" + old_miner->api_gateway_port + " --api-allow=127.0.0.1 -r 3 --retry-pause=5 --timeout=10";
+				if (strcmp(old_miner->command, miner_start_command_old.c_str()) != 0)
+				{
+					StopMiner(miner_data->resource);
+					delete old_miner;
+					miners_.erase(miners_.find(miner_data->resource));
+				}
+				// If the miner running there is the same as the one we want to run, leave it alone
+				else
+					response = success;
 			}
 
-			miners_.insert(std::pair<tstring, Miner*>(miner_data->resource, miner_data));
+			// Start miner if we have nothing running here
+			if(miners_.count(miner_data->resource) == 0)
+			{
+				miners_.insert(std::pair<tstring, Miner*>(miner_data->resource, miner_data));
 
-			response = (StartMiner(miner_data) != 0) ? success : failure;
+				response = (StartMiner(miner_data) != 0) ? success : failure;
+			}
 
 			response->command = PTCHAR(CMD_START_MINER);
 			response->data["resource"] = devices_[atoi(resource.c_str())];
@@ -554,6 +595,17 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 
 			client.SendData(response);
 			LOG_F(INFO, "Stopped mining");
+		}
+		else if (strcmp(request->command, CMD_DISCONNECT) == 0)
+		{
+			client.Close(true);
+			client_socket = INVALID_SOCKET;
+		}
+		else if(strcmp(request->command, CMD_TERMINATE) == 0)
+		{
+			client.Close(true);
+			client_socket = INVALID_SOCKET;
+			terminate = TRUE;
 		}
 		else
 		{
@@ -580,9 +632,17 @@ END:
 
 	LOG_F(INFO, "CLIENT DISCONNECTED");
 
-	PDelete(stats);
 	PDelete(success);
 	PDelete(failure);
+
+	// If terminating kill the application/service
+	if(terminate)
+	{
+		if (IsDebug())
+			OnStop();
+
+		SetStatusStopped(0x0);
+	}
 
 	return 0x0;
 }

@@ -22,6 +22,7 @@ public:
 		// Initialize base data
 		client_socket_ = INVALID_SOCKET;
 		initialized_ = FALSE;
+		socket_addrinfo_ = NULL;
 
 		// Setup WSA data
 		if (WSAStartup(MAKEWORD(2, 2), &wsa_data_) != 0)
@@ -81,9 +82,13 @@ protected:
 
 		// If we have a server socket then clean it up
 		if (client_socket_ != INVALID_SOCKET)
+		{
 			closesocket(client_socket_);
+			client_socket_ = INVALID_SOCKET;
+		}
 
-		freeaddrinfo(socket_addrinfo_);
+		if(socket_addrinfo_ != NULL)
+			freeaddrinfo(socket_addrinfo_);
 	}
 
 private:

@@ -44,6 +44,8 @@ static const char* CMD_START_MINER =  "startMiner";
 static const char* CMD_STOP_MINER  =  "stopMiner";
 static const char* CMD_RESOURCES   =  "resources";
 static const char* CMD_STATS       =  "hashRate";
+static const char* CMD_DISCONNECT  =  "disconnect";
+static const char* CMD_TERMINATE   =  "terminate";
 
 // TODO: Place this somewhere better
 typedef std::basic_string<TCHAR> tstring;
@@ -73,7 +75,9 @@ class MiningService : public IService
 			free(api_gateway_port);
 
 			CloseHandle(thread);
+			thread = INVALID_HANDLE_VALUE;
 			delete process;
+			process = NULL;
 		}
 	};
 

@@ -19,7 +19,7 @@ using namespace nlohmann;
 #define DISPLAY_NAME "Dynamine Mining Daemon"
 
 // Service start options
-#define SERVICE_START_TYPE       SERVICE_DEMAND_START
+#define SERVICE_START_TYPE       SERVICE_AUTO_START
 
 // List of service dependencies - "dep1\0dep2\0\0"
 #define SERVICE_DEPENDENCIES     ""
@@ -76,7 +76,8 @@ class MiningService : public IService
 
 			CloseHandle(thread);
 			thread = INVALID_HANDLE_VALUE;
-			delete process;
+			if(process->hProcess == INVALID_HANDLE_VALUE)
+				delete process;
 			process = NULL;
 		}
 	};

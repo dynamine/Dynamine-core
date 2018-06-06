@@ -164,6 +164,7 @@ BOOL MiningService::StartMiner(Miner* miner)
 	thread_data->instance = this;
 	thread_data->miner = miner;
 
+
 	miner->thread = CreateThread(NULL, NULL, LPTHREAD_START_ROUTINE(MinerThreadProxy), thread_data, NULL, NULL);
 
 	if (miner->thread == INVALID_HANDLE_VALUE)
@@ -206,7 +207,7 @@ BOOL MiningService::StopMiner(tstring resource)
 		return FALSE;
 	}
 
-	WaitForSingleObject(miner_data->thread, INFINITE);
+	WaitForSingleObject(miner_data->process->hThread, INFINITE);
 
 	return TRUE;
 }

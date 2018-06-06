@@ -173,7 +173,7 @@ BOOL IService::Install(CONST DWORD start_type, PTSTR dependencies, PTSTR account
 	}
 
 	ret = TRUE;
-	LOG_F(ERROR, "%s is installed.", service_name_);
+	LOG_F(INFO, "%s is installed.", service_name_);
 
 Cleanup:
 	// Centralized cleanup for all allocated resources.
@@ -244,7 +244,7 @@ BOOL IService::Uninstall()
 	// Now remove the service by calling DeleteService.
 	if (!DeleteService(service))
 	{
-		LOG_F(INFO, "DeleteService failed w/err 0x%08lx", GetLastError());
+		LOG_F(ERROR, "DeleteService failed w/err 0x%08lx", GetLastError());
 		goto Cleanup;
 	}
 

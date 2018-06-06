@@ -6,7 +6,79 @@
 // Create our singleton instance
 IService *IService::instance_;
 
-IService::IService(PWCHAR name, PWCHAR display_name, DWORD accepted_controls)
+// TODO: Figure out how to move this to Tools and fix cyclic deps
+LPSTR* CommandLineToArgvA(LPSTR lpCmdLine, INT *pNumArgs)
+{
+	int retval;
+	retval = MultiByteToWideChar(CP_ACP, MB_ERR_INVALID_CHARS, lpCmdLine, -1, NULL, 0);
+	if (!SUCCEEDED(retval))
+		return NULL;
+
+	LPWSTR lpWideCharStr = (LPWSTR)malloc(retval * sizeof(WCHAR));
+	if (lpWideCharStr == NULL)
+		return NULL;
+
+	retval = MultiByteToWideChar(CP_ACP, MB_ERR_INVALID_CHARS, lpCmdLine, -1, lpWideCharStr, retval);
+	if (!SUCCEEDED(retval))
+	{
+		free(lpWideCharStr);
+		return NULL;
+	}
+
+	int numArgs;
+	LPWSTR* args;
+	args = CommandLineToArgvW(lpWideCharStr, &numArgs);
+	free(lpWideCharStr);
+	if (args == NULL)
+		return NULL;
+
+	int storage = numArgs * sizeof(LPSTR);
+	for (int i = 0; i < numArgs; ++i)
+	{
+		BOOL lpUsedDefaultChar = FALSE;
+		retval = WideCharToMultiByte(CP_ACP, 0, args[i], -1, NULL, 0, NULL, &lpUsedDefaultChar);
+		if (!SUCCEEDED(retval))
+		{
+			LocalFree(args);
+			return NULL;
+		}
+
+		storage += retval;
+	}
+
+	LPSTR* result = (LPSTR*)LocalAlloc(LMEM_FIXED, storage);
+	if (result == NULL)
+	{
+		LocalFree(args);
+		return NULL;
+	}
+
+	int bufLen = storage - numArgs * sizeof(LPSTR);
+	LPSTR buffer = ((LPSTR)result) + numArgs * sizeof(LPSTR);
+	for (int i = 0; i < numArgs; ++i)
+	{
+		_ASSERTE(bufLen > 0);
+		BOOL lpUsedDefaultChar = FALSE;
+		retval = WideCharToMultiByte(CP_ACP, 0, args[i], -1, buffer, bufLen, NULL, &lpUsedDefaultChar);
+		if (!SUCCEEDED(retval))
+		{
+			LocalFree(result);
+			LocalFree(args);
+			return NULL;
+		}
+
+		result[i] = buffer;
+		buffer += retval;
+		bufLen -= retval;
+	}
+
+	LocalFree(args);
+
+	*pNumArgs = numArgs;
+	return result;
+}
+
+IService::IService(PTCHAR name, PTCHAR display_name, DWORD accepted_controls)
 {
 	// Clear memory
 	::ZeroMemory(PVOID(&status_), sizeof(SERVICE_STATUS));
@@ -16,8 +88,8 @@ IService::IService(PWCHAR name, PWCHAR display_name, DWORD accepted_controls)
 	// Initialize variables
 	InitializeCriticalSection(&status_mutex_);
 
-	::wcscpy_s(service_name_, name);
-	::wcscpy_s(display_name_, display_name);
+	::strcpy_s(service_name_, name);
+	::strcpy_s(display_name_, display_name);
 
 	status_handle_ = NULL;
 	exit_event_ = NULL;
@@ -56,7 +128,7 @@ IService::~IService()
 	DeleteCriticalSection(&status_mutex_);
 }
 
-BOOL IService::Install(CONST DWORD start_type, PWSTR dependencies, PWSTR account, PWSTR password)
+BOOL IService::Install(CONST DWORD start_type, PTSTR dependencies, PTSTR account, PTSTR password)
 {
 	TCHAR path[MAX_PATH];
 	SC_HANDLE service_manager = NULL;
@@ -101,7 +173,7 @@ BOOL IService::Install(CONST DWORD start_type, PWSTR dependencies, PWSTR account
 	}
 
 	ret = TRUE;
-	LOG_F(ERROR, "%s is installed.", service_name_);
+	LOG_F(INFO, "%s is installed.", service_name_);
 
 Cleanup:
 	// Centralized cleanup for all allocated resources.
@@ -157,7 +229,7 @@ BOOL IService::Uninstall()
 		{
 			if (service_status.dwCurrentState == SERVICE_STOP_PENDING)
 			{
-				wprintf(L".");
+				printf(".");
 				Sleep(1000);
 			}
 			else break;
@@ -172,7 +244,7 @@ BOOL IService::Uninstall()
 	// Now remove the service by calling DeleteService.
 	if (!DeleteService(service))
 	{
-		LOG_F(INFO, "DeleteService failed w/err 0x%08lx", GetLastError());
+		LOG_F(ERROR, "DeleteService failed w/err 0x%08lx", GetLastError());
 		goto Cleanup;
 	}
 
@@ -194,27 +266,27 @@ Cleanup:
 	return ret;
 }
 
-DWORD IService::Run(CONST DWORD start_type, PWSTR dependencies, PWSTR account, PWSTR password)
+DWORD IService::Run(CONST DWORD start_type, PTSTR dependencies, PTSTR account, PTSTR password)
 {
 	// Get command line arguments and set configs with them
 	int num_args = 0;
 	// Get unicode command line arguments just in case
-	LPWSTR* wchar_cmd_args = ::CommandLineToArgvW(::GetCommandLineW(), &num_args);
+	LPTSTR* tchar_cmd_args = CommandLineToArgvA(::GetCommandLineA(), &num_args);
 	// Loop over arguments
 	for (int i = 0; i < num_args; i++)
 	{
-		LPWSTR current_arg = wchar_cmd_args[i];
+		LPTSTR current_arg = tchar_cmd_args[i];
 		// If argument is a flag passed to the service then check it
 		if (current_arg[0] == L'/' || current_arg[0] == L'-')
 		{
 			// If the flag is debug then set the service to debug mode
-			if (::_wcsicmp(&current_arg[1], L"debug") == 0)
+			if (::_strcmpi(&current_arg[1], "debug") == 0)
 				debug_ = TRUE;
 
-			if (::_wcsicmp(&current_arg[1], L"install") == 0)
+			if (::_strcmpi(&current_arg[1], "install") == 0)
 				install_ = TRUE;
 			
-			if (::_wcsicmp(&current_arg[1], L"uninstall") == 0)
+			if (::_strcmpi(&current_arg[1], "uninstall") == 0)
 				uninstall_ = TRUE;
 
 		}
@@ -229,13 +301,13 @@ DWORD IService::Run(CONST DWORD start_type, PWSTR dependencies, PWSTR account, P
 	// If debugging as a console application we cannot attatch to the SVC_MGR so just run servce_main
 	if (debug_)
 	{
-		service_main(DWORD(num_args), wchar_cmd_args);
+		service_main(DWORD(num_args), tchar_cmd_args);
 		OnStop();
 	}
 	// This is what must run when the program is ran in a service context
 	else 
 	{
-		SERVICE_TABLE_ENTRYW service_table[] =
+		SERVICE_TABLE_ENTRY service_table[] =
 		{   
 			{ service_name_, service_main },
 			{ NULL, NULL }
@@ -244,7 +316,7 @@ DWORD IService::Run(CONST DWORD start_type, PWSTR dependencies, PWSTR account, P
 			status_.dwWin32ExitCode = GetLastError();
 	}
 
-	::LocalFree(wchar_cmd_args);
+	::LocalFree(tchar_cmd_args);
 
 	return status_.dwWin32ExitCode;
 }
@@ -329,7 +401,7 @@ VOID IService::service_main(DWORD argc, LPTSTR* argv)
 	instance_->_service_main(argc, argv);
 }
 
-BOOL IService::console_control_handler(DWORD ctrl_type)
+BOOL WINAPI IService::console_control_handler(DWORD ctrl_type)
 {
 	return instance_->_console_control_handler(ctrl_type);
 }
@@ -347,12 +419,15 @@ DWORD IService::service_control_handler(DWORD service_control, DWORD event_type,
 
 VOID IService::_service_main(DWORD argc, LPTSTR* argv)
 {
-	_ASSERTE(instance_ != NULL);
 
 	if (IsDebug())
 	{
 		// Register the console control handler
-		::SetConsoleCtrlHandler(PHANDLER_ROUTINE(console_control_handler), TRUE);
+		if(::SetConsoleCtrlHandler(PHANDLER_ROUTINE(console_control_handler), TRUE) == 0)
+		{
+			LOG_F(ERROR, "Failed to register ConsoleCtrlHandler!");
+			return;
+		}
 		LOG_F(INFO, "Press Ctrl+C or Ctrl+Break to quit...");
 	}
 	else
@@ -374,12 +449,16 @@ VOID IService::_service_main(DWORD argc, LPTSTR* argv)
 BOOL IService::_console_control_handler(DWORD ctrl_type)
 {
 	// If not any exit event then ignore
-	if (!(ctrl_type == CTRL_C_EVENT || ctrl_type == CTRL_BREAK_EVENT || ctrl_type == CTRL_SHUTDOWN_EVENT))
+	if (!(
+		ctrl_type == CTRL_C_EVENT || 
+		ctrl_type == CTRL_BREAK_EVENT || 
+		ctrl_type == CTRL_SHUTDOWN_EVENT ||
+		ctrl_type == CTRL_CLOSE_EVENT))
 		return FALSE;
 
 	OnStop();
 
-	return FALSE;
+	return TRUE;
 }
 
 DWORD IService::_service_control_handler(DWORD service_control, DWORD event_type, LPVOID event_data)

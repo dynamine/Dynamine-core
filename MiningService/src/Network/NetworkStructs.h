@@ -38,11 +38,6 @@ enum connection_status
 	connection_writing = 0x4
 };
 
-/* This is how the packet is setup.
-* However, we want to receive each part of this separate to prevent DDOSing.
-* The way this works is if the header is incorrect, then we reject the rest.
-* That way we won't be receiving huge amounts of fake data if it is sent. We will only
-* receive the large chunk of data if the id and header are correct. */
 struct Packet
 {
 	Packet() { this->command = new char[CHAR_MAX];  }
@@ -53,6 +48,15 @@ struct Packet
 		this->command[strlen(this->command)] = '\0';
 
 		this->data = json::parse(data);
+	}
+
+	Packet(char* command, json j)
+	{
+		this->command = new char[CHAR_MAX];
+		memcpy(this->command, command, strlen(command) + 1);
+		this->command[strlen(this->command)] = '\0';
+
+		this->data = j;
 	}
 
 	char* command;

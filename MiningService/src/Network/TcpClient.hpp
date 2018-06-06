@@ -61,6 +61,7 @@ public:
 		return;
 
 	FAILED:
+		socket_addrinfo_ = NULL;
 		Cleanup();
 	}
 

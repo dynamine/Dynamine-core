@@ -175,7 +175,8 @@ BOOL MiningService::StartMiner(Miner* miner)
 	Sleep(40500);
 
 	// Failed to get Process state, try to kill and return failure
-	if (GetExitCodeProcess(miner->process->hProcess, &exit_code) == FALSE || (exit_code != STILL_ACTIVE && exit_code != 0))
+	int rate = GetHashrate(miner->resource);
+	if (rate == -1 || rate == 0 || GetExitCodeProcess(miner->process->hProcess, &exit_code) == FALSE || (exit_code != STILL_ACTIVE && exit_code != 0))
 	{
 		StopMiner(miner->resource);
 		return FALSE;
@@ -206,7 +207,13 @@ BOOL MiningService::StopMiner(tstring resource)
 		return FALSE;
 	}
 
-	WaitForSingleObject(miner_data->thread, INFINITE);
+	// Close process and thread handles. 
+	CloseHandle(miner_data->process->hProcess);
+	CloseHandle(miner_data->process->hThread);
+
+	miner_data->process->hProcess = INVALID_HANDLE_VALUE;
+
+	//WaitForSingleObject(miner_data->thread, INFINITE);
 
 	return TRUE;
 }
@@ -367,6 +374,14 @@ int MiningService::GetHashrate(tstring resource)
 
 	// Create connection to local API
 	TcpClient api_client(miner->api_gateway_port);
+
+	if (api_client.IsInitialized() == FALSE)
+	{
+		LeaveCriticalSection(&(miner->mutex));
+
+		return hash_rate;
+	}
+
 	TcpConnection api(api_client.GetSocket());
 
 	// Send command to get thread data
@@ -413,6 +428,8 @@ VOID MiningService::MinerThread(Miner* miner)
 	si.cb = sizeof(si);
 	ZeroMemory(miner->process, sizeof(*(miner->process)));
 
+	tstring resource = miner->resource;
+
 	// Start the child process. 
 	if (!CreateProcess(NULL,            // No module name (use command line)
 		miner->command,                 // Command line
@@ -433,13 +450,9 @@ VOID MiningService::MinerThread(Miner* miner)
 	// Wait until child process exits.
 	WaitForSingleObject(miner->process->hProcess, INFINITE);
 
-	LOG_F(INFO, "Stopping miner on resource %s", miner->resource.c_str());
+	LOG_F(INFO, "Stopping miner on resource %s", resource.c_str());
 
-	// Close process and thread handles. 
-	CloseHandle(miner->process->hProcess);
-	CloseHandle(miner->process->hThread);
-
-	miner->process->hProcess = INVALID_HANDLE_VALUE;
+	
 }
 
 VOID MiningService::CommandServerThread()
@@ -592,6 +605,12 @@ DWORD WINAPI MiningService::OnClientConnect(SOCKET client_socket)
 			PTSTR resource = _strdup(str_resource.c_str());
 
 			response = StopMiner(resource) ? success : failure;
+
+			if (response == success)
+			{
+				delete miners_[str_resource];
+				miners_.erase(miners_.find(str_resource));
+			}
 
 			response->command = PTCHAR(CMD_STOP_MINER);
 			response->data["resource"] = devices_[atoi(resource)];
